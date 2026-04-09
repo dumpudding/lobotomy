@@ -230,7 +230,7 @@ function newNightMiniGameScene(state)
 
     scene.meterInterior = { -- change height? its not full #TODO
         x = 34,
-        y = 46,
+        y = 47,
         w = 33,
         h = 170
     }
@@ -413,8 +413,7 @@ function newLevel1WindowScene(state)
 
     scene.state = state
     scene.musicPath = "png_and_wavs/window_view/a_gust_of_odd_wind"
-    scene.windowAnim = GameUtils.loadAnim("png_and_wavs/window_view/window_animated.gif", 10, true)
-    scene.dialogue = GameUtils.makeDialogue("...")
+    scene.windowAnim = GameUtils.loadAnim("png_and_wavs/window_view/window_animated.gif", 10, true, 1.0)
 
     function scene:update(dt)
         self.windowAnim:update(dt)
