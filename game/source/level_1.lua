@@ -17,7 +17,7 @@ function newTitleScene(state)
     scene.musicPath = "png_and_wavs/title_screen/alienazzbeat"
 
     scene.warningImage = GameUtils.loadImage("png_and_wavs/title_screen/warning_v1.png")
-    scene.introAnim = GameUtils.loadAnim("png_and_wavs/title_screen/brain for intro screen with buttons.gif", 10, true)
+    scene.introAnim = GameUtils.loadAnim("png_and_wavs/title_screen/brain for intro screen with buttons.gif", 10, true, 0.5)
 
     scene.phase = "warning"
     scene.timer = 0
@@ -25,54 +25,77 @@ function newTitleScene(state)
     scene.crossfadeDuration = 0.75
 
     function scene:update(dt)
-    if GameUtils.skipComboJustPressed() then
-        if self.phase == "warning" or self.phase == "crossfade" then
-            self.phase = "intro"
-            self.timer = 0
+        if GameUtils.skipComboJustPressed() then
+            if self.phase == "warning" or self.phase == "crossfade" or self.phase == "warningReplay" then
+                self.phase = "intro"
+                self.timer = 0
+                if self.introAnim then
+                    self.introAnim:reset()
+                end
+                return
+            end
+
+            if self.phase == "intro" then
+                Game:switchScene(function(nextState)
+                    return newNightIntroScene(nextState)
+                end)
+                return
+            end
+        end
+
+        if self.phase == "warning" then
+            self.timer = self.timer + dt
+            if self.timer >= self.warningDuration then
+                self.phase = "crossfade"
+                self.timer = 0
+            end
+            return
+        end
+
+        if self.phase == "crossfade" then
+            self.timer = self.timer + dt
+            self.introAnim:update(dt)
+
+            if self.timer >= self.crossfadeDuration then
+                self.phase = "intro"
+                self.timer = 0
+            end
+            return
+        end
+
+        if self.phase == "warningReplay" then
+            if playdate.buttonJustPressed(playdate.kButtonA) then
+                self.phase = "intro"
+                self.timer = 0
+                if self.introAnim then
+                    self.introAnim:reset()
+                end
+            end
             return
         end
 
         if self.phase == "intro" then
-            Game:switchScene(function(nextState)
-                return newNightIntroScene(nextState)
-            end)
-            return
-        end
-    end
+            self.introAnim:update(dt)
 
-    if self.phase == "warning" then
-        self.timer = self.timer + dt
-        if self.timer >= self.warningDuration then
-            self.phase = "crossfade"
-            self.timer = 0
-        end
-        return
-    end
+            if playdate.buttonJustPressed(playdate.kButtonA) then
+                Game:switchScene(function(nextState)
+                    return newNightIntroScene(nextState)
+                end)
+                return
+            end
 
-    if self.phase == "crossfade" then
-        self.timer = self.timer + dt
-        self.introAnim:update(dt)
-        if self.timer >= self.crossfadeDuration then
-            self.phase = "intro"
-            self.timer = 0
+            if playdate.buttonJustPressed(playdate.kButtonB) then
+                self.phase = "warningReplay"
+                self.timer = 0
+                return
+            end
         end
-        return
-    end
-
-    if self.phase == "intro" then
-        self.introAnim:update(dt)
-        if playdate.buttonJustPressed(playdate.kButtonA) then
-            Game:switchScene(function(nextState)
-                return newNightIntroScene(nextState)
-            end)
-        end
-    end
     end
 
     function scene:draw()
         gfx.clear(gfx.kColorBlack)
 
-        if self.phase == "warning" then
+        if self.phase == "warning" or self.phase == "warningReplay" then
             if self.warningImage then
                 self.warningImage:draw(0, 0)
             end
@@ -101,122 +124,284 @@ function newTitleScene(state)
     return scene
 end
 
-function newNightIntroScene(state)
+function newWindowSunriseScene(state)
     local scene = {}
 
     scene.state = state
-    scene.musicPath = "png_and_wavs/night/mateos_jiv"
-
-    scene.anim1 = GameUtils.loadAnim("png_and_wavs/night/1_mateo_intro.gif", 10, false, 0.5)
-    scene.waitImage = GameUtils.loadImage("png_and_wavs/night/2_mateo_wait.png")
-    scene.animA = GameUtils.loadAnim("png_and_wavs/night/3.1_mateo_gn.gif", 10, false, 0.5)
-    scene.animB = GameUtils.loadAnim("png_and_wavs/night/3.2_mateo_awkward.gif", 10, false, 0.5)
-    scene.anim4 = GameUtils.loadAnim("png_and_wavs/night/4_walk_away.gif", 10, false, 0.5)
-
-    scene.phase = "mateo1"
+    scene.musicPath = "png_and_wavs/window_view/a_gust_of_odd_wind"
+    scene.anim = GameUtils.loadAnim("png_and_wavs/window_view/window_sunrise_animation.gif", 10, false, 1.0)
 
     function scene:update(dt)
-    if GameUtils.skipComboJustPressed() then
-        if self.phase == "mateo1" then
-            self.phase = "wait"
-            return
-        end
-
-        if self.phase == "wait" then
-            self.animA:reset()
-            self.phase = "choiceA"
-            return
-        end
-
-        if self.phase == "choiceA" or self.phase == "choiceB" then
-            self.anim4:reset()
-            self.phase = "walkAway"
-            return
-        end
-
-        if self.phase == "walkAway" then
-            Game:switchScene(function(nextState)
-                return newLevel1Scene(nextState)
-            end)
-            return
+        if self.anim then
+            self.anim:update(dt)
         end
     end
 
-    if self.phase == "mateo1" then
-        self.anim1:update(dt)
-        if self.anim1.finished then
-            self.phase = "wait"
-        end
-        return
-    end
-
-    if self.phase == "wait" then
-        if playdate.buttonJustPressed(playdate.kButtonA) then
-            self.animA:reset()
-            self.phase = "choiceA"
-        elseif playdate.buttonJustPressed(playdate.kButtonB) then
-            self.animB:reset()
-            self.phase = "choiceB"
-        end
-        return
-    end
-
-    if self.phase == "choiceA" then
-        self.animA:update(dt)
-        if self.animA.finished then
-            self.anim4:reset()
-            self.phase = "walkAway"
-        end
-        return
-    end
-
-    if self.phase == "choiceB" then
-        self.animB:update(dt)
-        if self.animB.finished then
-            self.anim4:reset()
-            self.phase = "walkAway"
-        end
-        return
-    end
-
-    if self.phase == "walkAway" then
-        self.anim4:update(dt)
-        if self.anim4.finished then
-            Game:switchScene(function(nextState)
-                return newLevel1Scene(nextState)
-            end)
-        end
-    end
-    end
-    
     function scene:draw()
         gfx.clear(gfx.kColorBlack)
 
-        if self.phase == "mateo1" then
-            self.anim1:draw(0, 0)
-            return
+        if self.anim then
+            self.anim:draw(0, 0)
         end
+    end
 
-        if self.phase == "wait" then
-            if self.waitImage then
-                self.waitImage:draw(0, 0)
+    return scene
+end
+function newNightInstructionsScene(state)
+    local scene = {}
+
+    scene.state = state
+    scene.musicPath = nil
+    scene.image = GameUtils.loadImage("png_and_wavs/night/night_instruction.png")
+
+    function scene:update(dt)
+        if GameUtils.skipComboJustPressed() or playdate.buttonJustPressed(playdate.kButtonA) then
+            Game:switchScene(function(nextState)
+                return newNightMiniGameScene(nextState)
+            end)
+        end
+    end
+
+    function scene:draw()
+        gfx.clear(gfx.kColorBlack)
+
+        if self.image then
+            self.image:draw(0, 0)
+        end
+    end
+
+    return scene
+end
+
+function newCatchingZsScene(state)
+    local scene = {}
+
+    scene.state = state
+    scene.musicPath = nil
+    scene.anim = GameUtils.loadAnim("png_and_wavs/night/catching_zs.gif", 10, false, 0.5)
+
+    function scene:update(dt)
+        if self.anim then
+            self.anim:update(dt)
+
+            if self.anim.finished then
+                Game:switchScene(function(nextState)
+                    return newWindowSunriseScene(nextState)
+                end)
             end
-            return
+        end
+    end
+
+    function scene:draw()
+        gfx.clear(gfx.kColorBlack)
+
+        if self.anim then
+            self.anim:draw(0, 0)
+        end
+    end
+
+    return scene
+end
+
+function newNightMiniGameScene(state)
+    local scene = {}
+
+    scene.state = state
+    scene.musicPath = nil
+
+    scene.bg = GameUtils.loadImage("png_and_wavs/night/night_minigame_config.png")
+    scene.overlay = GameUtils.loadImage("png_and_wavs/night/night_minigame_fov.png")
+    scene.sleepyMeter = GameUtils.loadImage("png_and_wavs/night/sleepy_meter.png")
+    scene.demonImage = GameUtils.loadImage("png_and_wavs/night/demon_64x64") or GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_64x64")
+
+    scene.overlayX = 0
+    scene.overlayY = 0
+    scene.speed = 2.5
+
+    scene.minOverlayX = -80
+    scene.maxOverlayX = 80
+    scene.minOverlayY = -48
+    scene.maxOverlayY = 48
+
+    scene.fovBaseX = 200
+    scene.fovBaseY = 120
+    scene.fovRadius = 45
+
+    scene.meterInterior = {
+        x = 34,
+        y = 50,
+        w = 33,
+        h = 170
+    }
+
+    scene.sleepiness = 0
+    scene.fillRate = 1 / 6
+    scene.drainRate = 1 / 10
+
+    scene.currentDemon = nil
+    scene.spawnTimer = math.random(2, 6)
+
+    function scene:getFovCenter()
+        return self.fovBaseX + self.overlayX, self.fovBaseY + self.overlayY
+    end
+
+    function scene:circleRectIntersects(cx, cy, r, rx, ry, rw, rh)
+        local closestX = math.max(rx, math.min(cx, rx + rw))
+        local closestY = math.max(ry, math.min(cy, ry + rh))
+        local dx = cx - closestX
+        local dy = cy - closestY
+        return dx * dx + dy * dy <= r * r
+    end
+
+    function scene:anyDemonVisible()
+    if self.currentDemon == nil then
+        return false
+    end
+
+    local cx, cy = self:getFovCenter()
+
+    return self:circleRectIntersects(
+        cx,
+        cy,
+        self.fovRadius,
+        self.currentDemon.x,
+        self.currentDemon.y,
+        64,
+        64
+    )
+    end
+
+    function scene:spawnDemonInFov()
+    local cx, cy = self:getFovCenter()
+
+    local angle = math.random() * math.pi * 2
+    local radius = math.random() * (self.fovRadius * 0.6)
+
+    local centerX = cx + math.cos(angle) * radius
+    local centerY = cy + math.sin(angle) * radius
+
+    local demonX = math.floor(centerX - 32)
+    local demonY = math.floor(centerY - 32)
+
+    demonX = GameUtils.clamp(demonX, 0, 400 - 64)
+    demonY = GameUtils.clamp(demonY, 0, 240 - 64)
+
+    self.currentDemon = {
+        x = demonX,
+        y = demonY
+    }
+    end
+
+    function scene:updateMovement()
+        if playdate.buttonIsPressed(playdate.kButtonLeft) then
+            self.overlayX = self.overlayX - self.speed
         end
 
-        if self.phase == "choiceA" then
-            self.animA:draw(0, 0)
-            return
+        if playdate.buttonIsPressed(playdate.kButtonRight) then
+            self.overlayX = self.overlayX + self.speed
         end
 
-        if self.phase == "choiceB" then
-            self.animB:draw(0, 0)
-            return
+        if playdate.buttonIsPressed(playdate.kButtonUp) then
+            self.overlayY = self.overlayY - self.speed
         end
 
-        if self.phase == "walkAway" then
-            self.anim4:draw(0, 0)
+        if playdate.buttonIsPressed(playdate.kButtonDown) then
+            self.overlayY = self.overlayY + self.speed
         end
+
+        self.overlayX = GameUtils.clamp(self.overlayX, self.minOverlayX, self.maxOverlayX)
+        self.overlayY = GameUtils.clamp(self.overlayY, self.minOverlayY, self.maxOverlayY)
+    end
+
+    function scene:updateSpawnTimer(dt)
+        self.spawnTimer = self.spawnTimer - dt
+
+        if self.spawnTimer <= 0 then
+            self:spawnDemonInFov()
+            self.spawnTimer = 0.5 + math.random(2, 6)
+        end
+    end
+
+    function scene:updateSleepiness(dt)
+    local visible = self:anyDemonVisible()
+
+    if visible then
+        self.sleepiness = self.sleepiness - self.drainRate * dt
+    else
+        self.sleepiness = self.sleepiness + self.fillRate * dt
+    end
+
+    self.sleepiness = GameUtils.clamp(self.sleepiness, 0, 1)
+
+    if self.sleepiness >= 1 then
+        Game:switchScene(function(nextState)
+            return newCatchingZsScene(nextState)
+        end)
+        return true
+    end
+
+    return false
+    end
+
+    function scene:drawSleepyMeter()
+        local fillHeight = math.floor(self.sleepiness * self.meterInterior.h + 0.5)
+
+        if fillHeight > 0 then
+            local fillY = self.meterInterior.y + self.meterInterior.h - fillHeight
+
+            gfx.setColor(gfx.kColorWhite)
+            gfx.fillRect(self.meterInterior.x, fillY, self.meterInterior.w, fillHeight)
+
+            gfx.setColor(gfx.kColorBlack)
+            gfx.drawLine(self.meterInterior.x, fillY, self.meterInterior.x + self.meterInterior.w - 1, fillY)
+        end
+
+        if self.sleepyMeter then
+            self.sleepyMeter:draw(0, 0)
+        end
+    end
+
+    function scene:update(dt)
+        self:updateMovement()
+        self:updateSpawnTimer(dt)
+
+        if self:updateSleepiness(dt) then
+            return
+        end
+    end
+
+    function scene:draw()
+        gfx.clear(gfx.kColorBlack)
+
+        if self.bg then
+            self.bg:draw(0, 0)
+        end
+
+        if 
+            self.demonImage and self.currentDemon 
+        then
+            self.demonImage:draw(self.currentDemon.x, self.currentDemon.y)
+        end
+
+        if self.overlay then
+            self.overlay:draw(self.overlayX, self.overlayY)
+
+            gfx.setColor(gfx.kColorBlack)
+
+            if self.overlayX > 0 then
+                gfx.fillRect(0, 0, self.overlayX, 240)
+            elseif self.overlayX < 0 then
+                gfx.fillRect(400 + self.overlayX, 0, -self.overlayX, 240)
+            end
+
+            if self.overlayY > 0 then
+                gfx.fillRect(0, 0, 400, self.overlayY)
+            elseif self.overlayY < 0 then
+                gfx.fillRect(0, 240 + self.overlayY, 400, -self.overlayY)
+            end
+        end
+
+        self:drawSleepyMeter()
     end
 
     return scene
@@ -255,68 +440,121 @@ function newLevel1WindowScene(state)
     return scene
 end
 
-function newNightMiniGameScene(state)
+function newNightIntroScene(state)
     local scene = {}
 
     scene.state = state
     scene.musicPath = "png_and_wavs/night/mateos_jiv"
 
-    scene.bg = GameUtils.loadImage("png_and_wavs/night/night_minigame_config.png")
-    scene.overlay = GameUtils.loadImage("png_and_wavs/night/night_minigame_fov.png")
+    scene.anim1 = GameUtils.loadAnim("png_and_wavs/night/1_mateo_intro.gif", 10, false, 0.5)
+    scene.waitImage = GameUtils.loadImage("png_and_wavs/night/2_mateo_wait.png")
+    scene.animA = GameUtils.loadAnim("png_and_wavs/night/3.1_mateo_gn.gif", 10, false, 0.5)
+    scene.animB = GameUtils.loadAnim("png_and_wavs/night/3.2_mateo_awkward.gif", 10, false, 0.5)
+    scene.anim4 = GameUtils.loadAnim("png_and_wavs/night/4_walk_away.gif", 10, false, 0.5)
 
-    scene.overlayX = 0
-    scene.overlayY = 0
-    scene.speed = 2
-
-    scene.minOverlayX = -80
-    scene.maxOverlayX = 80
-    scene.minOverlayY = -48
-    scene.maxOverlayY = 48
+    scene.phase = "mateo1"
 
     function scene:update(dt)
-        if playdate.buttonIsPressed(playdate.kButtonLeft) then
-            self.overlayX = self.overlayX - self.speed
+        if GameUtils.skipComboJustPressed() then
+            if self.phase == "mateo1" then
+                self.phase = "wait"
+                return
+            end
+
+            if self.phase == "wait" then
+                self.animA:reset()
+                self.phase = "choiceA"
+                return
+            end
+
+            if self.phase == "choiceA" or self.phase == "choiceB" then
+                self.anim4:reset()
+                self.phase = "walkAway"
+                return
+            end
+
+            if self.phase == "walkAway" then
+                Game:switchScene(function(nextState)
+                    return newLevel1Scene(nextState)
+                end)
+                return
+            end
         end
 
-        if playdate.buttonIsPressed(playdate.kButtonRight) then
-            self.overlayX = self.overlayX + self.speed
+        if self.phase == "mateo1" then
+            self.anim1:update(dt)
+            if self.anim1.finished then
+                self.phase = "wait"
+            end
+            return
         end
 
-        if playdate.buttonIsPressed(playdate.kButtonUp) then
-            self.overlayY = self.overlayY - self.speed
+        if self.phase == "wait" then
+            if playdate.buttonJustPressed(playdate.kButtonA) then
+                self.animA:reset()
+                self.phase = "choiceA"
+            elseif playdate.buttonJustPressed(playdate.kButtonB) then
+                self.animB:reset()
+                self.phase = "choiceB"
+            end
+            return
         end
 
-        if playdate.buttonIsPressed(playdate.kButtonDown) then
-            self.overlayY = self.overlayY + self.speed
+        if self.phase == "choiceA" then
+            self.animA:update(dt)
+            if self.animA.finished then
+                self.anim4:reset()
+                self.phase = "walkAway"
+            end
+            return
         end
 
-        self.overlayX = GameUtils.clamp(self.overlayX, self.minOverlayX, self.maxOverlayX)
-        self.overlayY = GameUtils.clamp(self.overlayY, self.minOverlayY, self.maxOverlayY)
+        if self.phase == "choiceB" then
+            self.animB:update(dt)
+            if self.animB.finished then
+                self.anim4:reset()
+                self.phase = "walkAway"
+            end
+            return
+        end
+
+        if self.phase == "walkAway" then
+            self.anim4:update(dt)
+            if self.anim4.finished then
+                Game:switchScene(function(nextState)
+                    return newLevel1Scene(nextState)
+                end)
+            end
+        end
     end
 
     function scene:draw()
         gfx.clear(gfx.kColorBlack)
 
-        if self.bg then
-            self.bg:draw(0, 0)
+        if self.phase == "mateo1" then
+            self.anim1:draw(0, 0)
+            return
         end
 
-        if self.overlay then
-            self.overlay:draw(self.overlayX, self.overlayY)
-
-            gfx.setColor(gfx.kColorBlack)
-
-            if self.overlayX > 0 then
-                gfx.fillRect(0, 0, self.overlayX, 240)
-            elseif self.overlayX < 0 then
-                gfx.fillRect(400 + self.overlayX, 0, -self.overlayX, 240)
+        if self.phase == "wait" then
+            if self.waitImage then
+                self.waitImage:draw(0, 0)
             end
+            return
+        end
 
-            if self.overlayY > 0 then
-                gfx.fillRect(0, 0, 400, self.overlayY)
-            elseif self.overlayY < 0 then
-                gfx.fillRect(0, 240 + self.overlayY, 400, -self.overlayY)
-            end
+        if self.phase == "choiceA" then
+            self.animA:draw(0, 0)
+            return
+        end
+
+        if self.phase == "choiceB" then
+            self.animB:draw(0, 0)
+            return
+        end
+
+        if self.phase == "walkAway" then
+            self.anim4:draw(0, 0)
         end
     end
 
@@ -444,7 +682,7 @@ function newLevel1Scene(state)
                 anchor = { x = 250, y = 90 },
                 action = function(selfScene)
                     Game:switchScene(function(nextState)
-                        return newNightMiniGameScene(nextState)
+                        return newNightInstructionsScene(nextState)
                     end)
                 end
             }
