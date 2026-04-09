@@ -1,4 +1,5 @@
-name=Lobotomy-v20260408
+name=Lobotomy
+version=20260408
 author=Eunice
 description=A game about ... I won't spoil it for you :)
 bundleID=com.pudding.mygame

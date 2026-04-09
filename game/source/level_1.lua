@@ -147,6 +147,7 @@ function newWindowSunriseScene(state)
 
     return scene
 end
+
 function newNightInstructionsScene(state)
     local scene = {}
 
@@ -292,7 +293,7 @@ function newNightMiniGameScene(state)
     }
     end
 
-    function scene:updateMovement()
+    function scene:updateMovement(dt)
         if playdate.buttonIsPressed(playdate.kButtonLeft) then
             self.overlayX = self.overlayX - self.speed
         end
@@ -362,7 +363,7 @@ function newNightMiniGameScene(state)
     end
 
     function scene:update(dt)
-        self:updateMovement()
+        self:updateMovement(dt)
         self:updateSpawnTimer(dt)
 
         if self:updateSleepiness(dt) then
@@ -573,24 +574,33 @@ function newLevel1Scene(state)
 
     scene.images = {
         base = GameUtils.loadImage("png_and_wavs/lobby/lobby_empty"),
+        borders = GameUtils.loadImage("png_and_wavs/lobby/room_wall_borders"),
         lamp = GameUtils.loadImage("png_and_wavs/lobby/lamp"),
         bed = GameUtils.loadImage("png_and_wavs/lobby/bed"),
         window = GameUtils.loadImage("png_and_wavs/lobby/window"),
-        borders = GameUtils.loadImage("png_and_wavs/lobby/room_wall_borders"),
+        lampOffOverlay = GameUtils.loadImage("png_and_wavs/lobby/lamp_off_dither.png"),
         table = GameUtils.loadImage("png_and_wavs/lobby/table"),
         trashBin = GameUtils.loadImage("png_and_wavs/lobby/trash_bin"),
         plant = GameUtils.loadImage("png_and_wavs/lobby/plant"),
         door = GameUtils.loadImage("png_and_wavs/lobby/door"),
-        lampOffOverlay = GameUtils.loadImage("png_and_wavs/lobby/lamp_off_dither.png"),
-        sue = GameUtils.loadImage("png_and_wavs/lobby/sue_32x40") or GameUtils.loadImage("png_and_wavs/0_universal_sprites/sue_32x40"),
-        demon = GameUtils.loadImage("png_and_wavs/lobby/demon_64x64") or GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_64x64"),
+
+        sueIdle = GameUtils.loadImage("png_and_wavs/0_universal_sprites/sue_32x40"),
+
+        sueWalkDown = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_down.gif", 10, true, 1.0),
+        sueWalkLeft = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_left.gif", 10, true, 1.0),
+        sueWalkRight = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_right.gif", 10, true, 1.0),
+        sueWalkUp = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_up.gif", 10, true, 1.0),
+        
+        demon = GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_64x64"),
         needle = GameUtils.loadImage("png_and_wavs/trash_can/needle")
     }
 
     scene.player = {
         footX = 200,
         footY = 84,
-        speed = 2
+        speed = 2,
+        facing = "down",
+        isMoving = false
     }
 
     scene.dialogue = nil
@@ -707,7 +717,7 @@ function newLevel1Scene(state)
         return nil
     end
 
-    function scene:updateMovement()
+    function scene:updateMovement(dt)
         local dx = 0
         local dy = 0
 
@@ -727,6 +737,24 @@ function newLevel1Scene(state)
             dy = dy + 1
         end
 
+        self.player.isMoving = (dx ~= 0 or dy ~= 0)
+
+        if dx ~= 0 or dy ~= 0 then
+            if math.abs(dx) > math.abs(dy) then
+                if dx < 0 then
+                    self.player.facing = "left"
+                else
+                    self.player.facing = "right"
+                end
+            else
+                if dy < 0 then
+                    self.player.facing = "up"
+                else
+                    self.player.facing = "down"
+                end
+            end
+        end
+
         if dx ~= 0 and dy ~= 0 then
             dx = dx * 0.7071
             dy = dy * 0.7071
@@ -741,6 +769,18 @@ function newLevel1Scene(state)
         if not self:isBlocked(self.player.footX, nextY) then
             self.player.footY = nextY
         end
+
+        if self.player.isMoving then
+            if self.player.facing == "down" and self.images.sueWalkDown then
+                self.images.sueWalkDown:update(dt)
+            elseif self.player.facing == "left" and self.images.sueWalkLeft then
+                self.images.sueWalkLeft:update(dt)
+            elseif self.player.facing == "right" and self.images.sueWalkRight then
+                self.images.sueWalkRight:update(dt)
+            elseif self.player.facing == "up" and self.images.sueWalkUp then
+                self.images.sueWalkUp:update(dt)
+            end
+        end
     end
 
     function scene:update(dt)
@@ -753,7 +793,7 @@ function newLevel1Scene(state)
             return
         end
 
-        self:updateMovement()
+        self:updateMovement(dt)
 
         if playdate.buttonJustPressed(playdate.kButtonA) then
             local interactive = self:getNearbyInteractive()
@@ -777,13 +817,41 @@ function newLevel1Scene(state)
     end
 
     function scene:drawPlayer()
-        local image = self.state.replaceSueWithDemon and self.images.demon or self.images.sue
-        if not image then
+        if self.state.replaceSueWithDemon then
+            local demonImage = self.images.demon
+            if not demonImage then
+                return
+            end
+
+            local w, h = demonImage:getSize()
+            demonImage:draw(math.floor(self.player.footX - w / 2), math.floor(self.player.footY - h))
             return
         end
 
-        local w, h = image:getSize()
-        image:draw(math.floor(self.player.footX - w / 2), math.floor(self.player.footY - h))
+        local imageToDraw = nil
+
+        if self.player.isMoving then
+            if self.player.facing == "down" and self.images.sueWalkDown then
+                imageToDraw = self.images.sueWalkDown:getFrame()
+            elseif self.player.facing == "left" and self.images.sueWalkLeft then
+                imageToDraw = self.images.sueWalkLeft:getFrame()
+            elseif self.player.facing == "right" and self.images.sueWalkRight then
+                imageToDraw = self.images.sueWalkRight:getFrame()
+            elseif self.player.facing == "up" and self.images.sueWalkUp then
+                imageToDraw = self.images.sueWalkUp:getFrame()
+            end
+        end
+
+        if imageToDraw == nil then
+            imageToDraw = self.images.sueIdle
+        end
+
+        if imageToDraw == nil then
+            return
+        end
+
+        local w, h = imageToDraw:getSize()
+        imageToDraw:draw(math.floor(self.player.footX - w / 2), math.floor(self.player.footY - h))
 
         if self.state.heldItem == "needle" and self.images.needle then
             local bbox = { x = 221, y = 158, w = 31, h = 30 }

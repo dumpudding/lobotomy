@@ -11,7 +11,8 @@ function newBrainMiniGameScene(state)
         demon = GameUtils.loadImage("png_and_wavs/brain_mini_game/demon_32x32") or GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_32x32"),
         crankBar = GameUtils.loadImage("png_and_wavs/brain_mini_game/crank_bar"),
         lrBar = GameUtils.loadImage("png_and_wavs/brain_mini_game/left_right_bar"),
-        pointer = GameUtils.loadImage("png_and_wavs/brain_mini_game/left_right_pointer")
+        pointer = GameUtils.loadImage("png_and_wavs/brain_mini_game/left_right_pointer"),
+        background = GameUtils.loadImage("png_and_wavs/brain_mini_game/background.png")
     }
 
     scene.brainRect = { x = 105, y = 15, w = 187, h = 209 }
