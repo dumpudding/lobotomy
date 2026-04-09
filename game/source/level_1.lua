@@ -228,9 +228,9 @@ function newNightMiniGameScene(state)
     scene.fovBaseY = 120
     scene.fovRadius = 45
 
-    scene.meterInterior = {
+    scene.meterInterior = { -- change height? its not full #TODO
         x = 34,
-        y = 50,
+        y = 46,
         w = 33,
         h = 170
     }
