@@ -568,7 +568,12 @@ function newLevel1Scene(state)
     scene.musicPath = "png_and_wavs/night/mateos_jiv"
 
     if scene.state.level1 == nil then
-        scene.state.level1 = { lampOff = false }
+        scene.state.level1 = {
+            lampOff = false,
+            lobbyDoorLocked = true
+        }
+    elseif scene.state.level1.lobbyDoorLocked == nil then
+        scene.state.level1.lobbyDoorLocked = false
     end
 
     scene.images = {
@@ -680,6 +685,22 @@ function newLevel1Scene(state)
                 action = function(selfScene)
                     selfScene.state.level1.lampOff = not selfScene.state.level1.lampOff
                 end
+            },
+            {
+                name = "door",
+                prompt = "A: Inspect Door",
+                zone = { x = 114, y = 196, w = 56, h = 18 },
+                anchor = { x = 82, y = 194 },
+                action = function(selfScene)
+                    if selfScene.state.level1.lobbyDoorLocked then
+                        selfScene.dialogue = GameUtils.makeDialogue("the nurses would yell at me to lie down...")
+                        return
+                    end
+
+                    Game:switchScene(function(nextState)
+                        return newFloor2HallwayScene(nextState)
+                    end)
+                end
             }
         }
 
@@ -784,10 +805,8 @@ function newLevel1Scene(state)
 
     function scene:update(dt)
         if self.dialogue then
-            if playdate.buttonJustPressed(playdate.kButtonA) then
-                if GameUtils.advanceDialogue(self.dialogue) then
-                    self.dialogue = nil
-                end
+            if GameUtils.handleDialogueInput(self.dialogue) then
+                self.dialogue = nil
             end
             return
         end

@@ -5,7 +5,8 @@ import "CoreLibs/graphics"
 import "CoreLibs/timer"
 import "CoreLibs/crank"
 
-import "level_1"
+import "1_sue_room"
+import "floor_2"
 import "trash_bin"
 import "brain_mini_game"
 
@@ -235,37 +236,26 @@ end
 
 function GameUtils.makeDialogue(text)
     local font = Game.fonts.dialog or gfx.getSystemFont()
-    local maxWidth = 186
-    local maxLines = 3
-    local rawLines = GameUtils.wrapText(text, font, maxWidth)
-    local pages = {}
-    local index = 1
+    local sideMargin = 8
+    local maxWidth = 400 - sideMargin * 2
+    local markerLeft = "< "
+    local markerRight = " >"
+    local reservedMarkerWidth = font:getTextWidth(markerLeft .. markerRight)
+    local maxContentWidth = maxWidth - reservedMarkerWidth
 
-    while index <= #rawLines do
-        local lines = {}
-        for _ = 1, maxLines do
-            if index <= #rawLines then
-                lines[#lines + 1] = rawLines[index]
-                index = index + 1
-            end
-        end
-
-        pages[#pages + 1] = lines
+    if maxContentWidth < 40 then
+        maxContentWidth = 40
     end
 
-    for i = 1, #pages do
-        if i < #pages then
-            local last = pages[i][#pages[i]] or ""
-            pages[i][#pages[i]] = last .. "[...]"
-        end
+    text = tostring(text or "")
+    text = text:gsub("%s+", " ")
+    text = text:gsub("^%s+", "")
+    text = text:gsub("%s+$", "")
 
-        if i > 1 and pages[i][1] then
-            pages[i][1] = "[...] " .. pages[i][1]
-        end
-    end
+    local pages = GameUtils.wrapText(text, font, maxContentWidth)
 
-    for i = 1, #pages do
-        pages[i] = table.concat(pages[i], "\n")
+    if #pages == 0 then
+        pages = { "" }
     end
 
     return {
@@ -287,18 +277,101 @@ function GameUtils.advanceDialogue(dialogue)
     return true
 end
 
+function GameUtils.retreatDialogue(dialogue)
+    if not dialogue then
+        return false
+    end
+
+    if dialogue.index > 1 then
+        dialogue.index = dialogue.index - 1
+    end
+
+    return false
+end
+
+function GameUtils.handleDialogueInput(dialogue)
+    if not dialogue then
+        return false
+    end
+
+    if playdate.buttonJustPressed(playdate.kButtonB) then
+        GameUtils.retreatDialogue(dialogue)
+        return false
+    end
+
+    if playdate.buttonJustPressed(playdate.kButtonA) then
+        return GameUtils.advanceDialogue(dialogue)
+    end
+
+    return false
+end
+
 function GameUtils.drawDialogue(dialogue)
     if not dialogue then
         return
     end
 
-    gfx.setColor(gfx.kColorWhite)
-    gfx.fillRoundRect(8, 176, 216, 56, 4)
-    gfx.setColor(gfx.kColorBlack)
-    gfx.drawRoundRect(8, 176, 216, 56, 4)
+    local font = Game.fonts.dialog or gfx.getSystemFont()
+    local text = dialogue.pages[dialogue.index] or ""
+
+    if dialogue.index > 1 then
+        text = "< " .. text
+    end
+
+    if dialogue.index < #dialogue.pages then
+        text = text .. " >"
+    end
+
+    local w = font:getTextWidth(text)
+    local x = math.floor((400 - w) / 2)
+    local y = 240 - font:getHeight() - 2
+
+    GameUtils.drawTextWithUnderlay(text, x, y, font)
+end
+
+function GameUtils.advanceDialogue(dialogue)
+    if not dialogue then
+        return true
+    end
+
+    if dialogue.index < #dialogue.pages then
+        dialogue.index = dialogue.index + 1
+        return false
+    end
+
+    return true
+end
+
+function GameUtils.drawDialogue(dialogue)
+    if not dialogue then
+        return
+    end
 
     local font = Game.fonts.dialog or gfx.getSystemFont()
-    font:drawText(dialogue.pages[dialogue.index], 16, 186)
+    local text = dialogue.pages[dialogue.index] or ""
+    local lineGap = 2
+    local bottomMargin = 2
+
+    local lines = {}
+    for line in string.gmatch(text, "[^\n]+") do
+        lines[#lines + 1] = line
+    end
+
+    if #lines == 0 then
+        lines[1] = text
+    end
+
+    local lineHeight = font:getHeight()
+    local totalHeight = #lines * lineHeight + (#lines - 1) * lineGap
+    local startY = 240 - totalHeight - bottomMargin
+
+    for i = 1, #lines do
+        local line = lines[i]
+        local w = font:getTextWidth(line)
+        local x = math.floor((400 - w) / 2)
+        local y = startY + (i - 1) * (lineHeight + lineGap)
+        GameUtils.drawTextWithUnderlay(line, x, y, font)
+    end
 end
 
 function GameUtils.makeHeartImage()
