@@ -6,9 +6,9 @@ import "CoreLibs/timer"
 import "CoreLibs/crank"
 
 import "1_sue_room"
-import "floor_2"
-import "trash_bin"
-import "brain_mini_game"
+import "2_floor"
+import "3-1_trash_bin"
+import "4_brain_mini_game"
 
 local gfx = playdate.graphics
 local snd = playdate.sound
