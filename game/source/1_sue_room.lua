@@ -617,27 +617,27 @@ function newLevel1Scene(state)
                     end)
                 end
             }
-            end
         end
-
-        local best = nil
-        local bestDist = 999
-
-        for i = 1, #interactives do
-            local item = interactives[i]
-            local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, item.zone)
-            if d < bestDist then
-                best = item
-                bestDist = d
-            end
-        end
-
-        if best and bestDist <= 5 then
-            return best
-        end
-
-        return nil
     end
+
+    local best = nil
+    local bestDist = 999
+
+    for i = 1, #interactives do
+        local item = interactives[i]
+        local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, item.zone)
+        if d < bestDist then
+            best = item
+            bestDist = d
+        end
+    end
+
+    if best and bestDist <= 5 then
+        return best
+    end
+
+    return nil
+end
 
     function scene:updateMovement(dt)
         local dx = 0
@@ -796,7 +796,7 @@ function newLevel1Scene(state)
 
         self:drawPlayer()
 
-        if self.state.level1.lampOff and self.images.lampOffOverlay then
+        if not self.state.level1.breakfastDone and self.state.level1.lampOff and self.images.lampOffOverlay then
             self.images.lampOffOverlay:draw(0, 0)
         end
 

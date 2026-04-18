@@ -73,8 +73,8 @@ local breakfastItems = {
         bitePath = "png_and_wavs/morning/cheese_bite.gif",
         chewPath = "png_and_wavs/morning/cheese_chew",
         zone = { x = 120, y = 130, w = 63, h = 49 },
-        biteRange = { 0.22, 0.42 },
-        stashRange = { 0.62, 0.82 },
+        biteRange = { 0.45, 0.56 },
+        stashRange = { 0.84, 0.93 },
         degreesPerFrame = 16,
         chewFrameCount = 6,
         special = "cheese"
@@ -150,6 +150,7 @@ local function goToLobbyUnlocked()
 
     Game.state.level1.lobbyDoorLocked = false
     Game.state.level1.breakfastDone = true
+    Game.state.level1.lampOff = false
 
     if Game.go then
         Game:go("lobby")
@@ -786,7 +787,9 @@ function newBreakfastChewScene(state, itemKey)
 
         drawChewFrame(self.chewFrames, self.frameIndex)
 
-        if self.itemKey ~= "water" then
+        if self.itemKey == "water" then
+            drawChewMeter(nil, self:getChewProgress())
+        else
             drawChewMeter(self.images.chewBar, self:getChewProgress())
         end
 
