@@ -1,17 +1,18 @@
-function playdate.update()
-end
-
 import "CoreLibs/graphics"
 import "CoreLibs/timer"
 import "CoreLibs/crank"
 
 import "1_sue_room"
+import "1-1_breakfast"
 import "2_floor"
 import "3-1_trash_bin"
 import "4_brain_mini_game"
 
+import "0_title_screen"
+
 local gfx = playdate.graphics
 local snd = playdate.sound
+local unpackFn = table.unpack or unpack
 
 math.randomseed(playdate.getSecondsSinceEpoch())
 
@@ -24,6 +25,7 @@ function GameUtils.isSkipComboDown()
         playdate.buttonIsPressed(playdate.kButtonUp) and
         playdate.buttonIsPressed(playdate.kButtonRight)
 end
+
 function GameUtils.skipComboJustPressed()
     local down = GameUtils.isSkipComboDown()
     local fired = down and not Game.debug.skipComboWasDown
@@ -70,7 +72,7 @@ function GameUtils.loadAnim(path, fps, loop, speedScale)
     end
 
     local animSpeed = speedScale or 0.5
-    local frames, err = gfx.imagetable.new(path)
+    local frames = gfx.imagetable.new(path)
 
     if frames and #frames > 0 then
         return {
@@ -102,7 +104,12 @@ function GameUtils.loadAnim(path, fps, loop, speedScale)
                 end
 
                 self.accumulator = self.accumulator + dt
+
                 local effectiveFps = self.fps * self.speedScale
+                if effectiveFps <= 0 then
+                    effectiveFps = 1
+                end
+
                 local step = 1 / effectiveFps
 
                 while self.accumulator >= step do
@@ -199,6 +206,7 @@ function GameUtils.wrapText(text, font, maxWidth)
 
     for word in string.gmatch(text, "%S+") do
         local candidate = current == "" and word or (current .. " " .. word)
+
         if font:getTextWidth(candidate) <= maxWidth then
             current = candidate
         else
@@ -210,18 +218,22 @@ function GameUtils.wrapText(text, font, maxWidth)
                 current = word
             else
                 local chunk = ""
+
                 for i = 1, #word do
                     local c = string.sub(word, i, i)
                     local candidateChunk = chunk .. c
+
                     if font:getTextWidth(candidateChunk) <= maxWidth then
                         chunk = candidateChunk
                     else
                         if chunk ~= "" then
                             lines[#lines + 1] = chunk
                         end
+
                         chunk = c
                     end
                 end
+
                 current = chunk
             end
         end
@@ -306,6 +318,24 @@ function GameUtils.handleDialogueInput(dialogue)
     return false
 end
 
+function GameUtils.drawTextWithUnderlay(text, x, y, font)
+    font = font or Game.fonts.prompt or gfx.getSystemFont()
+
+    local padX = 2
+    local padY = 1
+    local w = font:getTextWidth(text)
+    local h = font:getHeight()
+
+    gfx.setColor(gfx.kColorBlack)
+    gfx.fillRect(x - padX, y - padY, w + padX * 2, h + padY * 2)
+
+    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+    font:drawText(text, x, y)
+    gfx.setImageDrawMode(gfx.kDrawModeCopy)
+
+    gfx.setColor(gfx.kColorBlack)
+end
+
 function GameUtils.drawDialogue(dialogue)
     if not dialogue then
         return
@@ -329,53 +359,9 @@ function GameUtils.drawDialogue(dialogue)
     GameUtils.drawTextWithUnderlay(text, x, y, font)
 end
 
-function GameUtils.advanceDialogue(dialogue)
-    if not dialogue then
-        return true
-    end
-
-    if dialogue.index < #dialogue.pages then
-        dialogue.index = dialogue.index + 1
-        return false
-    end
-
-    return true
-end
-
-function GameUtils.drawDialogue(dialogue)
-    if not dialogue then
-        return
-    end
-
-    local font = Game.fonts.dialog or gfx.getSystemFont()
-    local text = dialogue.pages[dialogue.index] or ""
-    local lineGap = 2
-    local bottomMargin = 2
-
-    local lines = {}
-    for line in string.gmatch(text, "[^\n]+") do
-        lines[#lines + 1] = line
-    end
-
-    if #lines == 0 then
-        lines[1] = text
-    end
-
-    local lineHeight = font:getHeight()
-    local totalHeight = #lines * lineHeight + (#lines - 1) * lineGap
-    local startY = 240 - totalHeight - bottomMargin
-
-    for i = 1, #lines do
-        local line = lines[i]
-        local w = font:getTextWidth(line)
-        local x = math.floor((400 - w) / 2)
-        local y = startY + (i - 1) * (lineHeight + lineGap)
-        GameUtils.drawTextWithUnderlay(line, x, y, font)
-    end
-end
-
 function GameUtils.makeHeartImage()
     local image = gfx.image.new(9, 8, gfx.kColorClear)
+
     gfx.pushContext(image)
         gfx.setColor(gfx.kColorBlack)
         gfx.fillRect(1, 1, 2, 2)
@@ -385,6 +371,7 @@ function GameUtils.makeHeartImage()
         gfx.fillRect(2, 5, 4, 1)
         gfx.fillRect(3, 6, 2, 1)
     gfx.popContext()
+
     return image
 end
 
@@ -409,30 +396,8 @@ function GameUtils.drawCrosshair(x, y)
     gfx.drawLine(x, y - 1, x, y + 1)
 end
 
-function GameUtils.drawTextWithUnderlay(text, x, y, font)
-    font = font or Game.fonts.prompt or gfx.getSystemFont()
-
-    local padX = 2
-    local padY = 1
-    local w = font:getTextWidth(text)
-    local h = font:getHeight()
-
-    gfx.setColor(gfx.kColorBlack)
-    gfx.fillRect(x - padX, y - padY, w + padX * 2, h + padY * 2)
-
-    gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-    font:drawText(text, x, y)
-    gfx.setImageDrawMode(gfx.kDrawModeCopy)
-
-    gfx.setColor(gfx.kColorBlack)
-end
-
 Game = {
     scene = nil,
-    nextSceneFactory = nil,
-    fadeAlpha = 1,
-    fadeDir = -1,
-    fadeSpeed = 0.08,
     lastTimeMs = playdate.getCurrentTimeMilliseconds(),
 
     music = {
@@ -446,7 +411,7 @@ Game = {
 
     fonts = {},
     assets = {},
-        
+
     debug = {
         skipComboWasDown = false
     },
@@ -456,7 +421,8 @@ Game = {
         lobbyTrashPile = false,
         replaceSueWithDemon = false,
         level1 = {
-            lampOff = false
+            lampOff = false,
+            lobbyDoorLocked = true
         },
         trashItems = {
             needle = "bin",
@@ -469,18 +435,20 @@ Game = {
 }
 
 function Game:loadFonts()
-    local promptFont = nil
-
+    local systemFont = gfx.getSystemFont()
     local customFontPath = "fonts/Bookxel_16"
+    local customFont = gfx.font.new(customFontPath)
 
-    promptFont = gfx.font.new(customFontPath)
-
-    if promptFont then
-        promptFont:setLeading(0)
-        self.fonts.prompt = promptFont
-        self.fonts.dialog = promptFont
+    if customFont then
+        customFont:setLeading(0)
+        self.fonts.prompt = customFont
+        self.fonts.dialog = customFont
         print("loaded custom font: " .. customFontPath)
+        return
     end
+
+    self.fonts.prompt = systemFont
+    self.fonts.dialog = systemFont
 end
 
 function Game:loadSharedAssets()
@@ -522,6 +490,7 @@ function Game:playMusic(path)
     end
 
     player:setVolume(0)
+
     local ok, err = player:play(0)
     if ok == false then
         print("music play failed: " .. tostring(path) .. " :: " .. tostring(err))
@@ -535,6 +504,7 @@ end
 
 function Game:updateMusic()
     local music = self.music
+
     if not music.next then
         return
     end
@@ -594,366 +564,82 @@ function Game:dropHeldItemFromLobby()
     end
 end
 
-local lobbyObjectBBoxes = {
-    bed = { x = 219, y = 58, w = 70, h = 48 },
-    lamp = { x = 115, y = 39, w = 32, h = 45 },
-    window = { x = 157, y = 32, w = 88, h = 21 },
-    table = { x = 265, y = 106, w = 31, h = 24 },
-    trash_bin = { x = 169, y = 180, w = 26, h = 26 },
-    plant = { x = 261, y = 181, w = 25, h = 25 },
-    door = { x = 120, y = 201, w = 44, h = 9 },
-    trash_pile = { x = 198, y = 186, w = 22, h = 19 }
+-- compatibility aliases so old scene files still work
+newLobbyScene = newLevel1Scene
+newWindowScene = newLevel1WindowScene
+
+Game.routes = {
+    title = function(state)
+        return newTitleScene(state)
+    end,
+
+    lobby = function(state)
+        return newLevel1Scene(state)
+    end,
+
+    lobbyWindow = function(state)
+        return newLevel1WindowScene(state)
+    end,
+
+    nightIntro = function(state)
+        return newNightIntroScene(state)
+    end,
+
+    nightInstructions = function(state)
+        return newNightInstructionsScene(state)
+    end,
+
+    nightMinigame = function(state)
+        return newNightMiniGameScene(state)
+    end,
+
+    catchingZs = function(state)
+        return newCatchingZsScene(state)
+    end,
+
+    sunriseWindow = function(state)
+        return newWindowSunriseScene(state)
+    end,
+
+    floor2Hallway = function(state)
+        return newFloor2HallwayScene(state)
+    end,
+
+    floor2Waiting = function(state, entry)
+        return newFloor2WaitingRoomScene(state, entry)
+    end,
+
+    floor2Tv = function(state)
+        return newFloor2TvRoomScene(state)
+    end,
+
+    trashBin = function(state)
+        return newTrashScene(state)
+    end,
+
+    brainMinigame = function(state)
+        return newBrainMiniGameScene(state)
+    end
 }
 
-function newLobbyScene(state)
-    local scene = {}
+function Game:go(routeName, ...)
+    local route = self.routes[routeName]
 
-    scene.state = state
-    scene.musicPath = "png_and_wavs/lobby/the_color_of_smog"
-
-    scene.images = {
-        base = GameUtils.loadImage("png_and_wavs/lobby/lobby_empty"),
-        borders = GameUtils.loadImage("png_and_wavs/lobby/room_wall_borders"),
-        lamp = GameUtils.loadImage("png_and_wavs/lobby/lamp"),
-        bed = GameUtils.loadImage("png_and_wavs/lobby/bed"),
-        window = GameUtils.loadImage("png_and_wavs/lobby/window"),
-        table = GameUtils.loadImage("png_and_wavs/lobby/table"),
-        trashBin = GameUtils.loadImage("png_and_wavs/lobby/trash_bin"),
-        plant = GameUtils.loadImage("png_and_wavs/lobby/plant"),
-        door = GameUtils.loadImage("png_and_wavs/lobby/door"),
-        trashPile = GameUtils.loadImage("png_and_wavs/lobby/trash_pile"),
-        sue = GameUtils.loadImage("png_and_wavs/lobby/sue_32x40") or GameUtils.loadImage("png_and_wavs/0_universal_sprites/sue_32x40"),
-        demon = GameUtils.loadImage("png_and_wavs/lobby/demon_64x64") or GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_64x64"),
-        needle = GameUtils.loadImage("png_and_wavs/trash_can/needle")
-    }
-
-    scene.player = {
-        footX = 200,
-        footY = 84,
-        speed = 2
-    }
-
-    scene.dialogue = nil
-
-    scene.blockRects = {
-        lobbyObjectBBoxes.bed,
-        lobbyObjectBBoxes.lamp,
-        lobbyObjectBBoxes.table,
-        lobbyObjectBBoxes.trash_bin,
-        lobbyObjectBBoxes.plant,
-        lobbyObjectBBoxes.door
-    }
-
-    scene.interactives = {
-        {
-            name = "window",
-            prompt = "A: Look Outside",
-            zone = { x = 154, y = 50, w = 94, h = 24 },
-            anchor = { x = 250, y = 52 },
-            action = function(self)
-                Game:switchScene(function(nextState)
-                    return newWindowScene(nextState)
-                end)
-            end
-        },
-        {
-            name = "trash_bin",
-            prompt = "A: Inspect Bin",
-            zone = { x = 163, y = 174, w = 38, h = 38 },
-            anchor = { x = 197, y = 188 },
-            action = function(self)
-                Game:switchScene(function(nextState)
-                    return newTrashScene(nextState)
-                end)
-            end
-        },
-        {
-            name = "lamp",
-            prompt = "A: Inspect Lamp",
-            zone = { x = 109, y = 37, w = 42, h = 52 },
-            anchor = { x = 150, y = 48 },
-            action = function(self)
-                self.dialogue = GameUtils.makeDialogue("not sharp enough…")
-            end
-        },
-        {
-            name = "bed",
-            prompt = "A: Inspect Bed",
-            zone = { x = 213, y = 94, w = 82, h = 18 },
-            anchor = { x = 292, y = 96 },
-            action = function(self)
-                self.dialogue = GameUtils.makeDialogue("im not sleepy. not yet.")
-            end
-        },
-        {
-            name = "door",
-            prompt = "A: Inspect Door",
-            zone = { x = 114, y = 196, w = 56, h = 18 },
-            anchor = { x = 82, y = 194 },
-            action = function(self)
-                self.dialogue = GameUtils.makeDialogue("the nurses would yell at me to lie down…")
-            end
-        }
-    }
-
-    function scene:getFootRect(x, y)
-        return {
-            x = math.floor(x - 5),
-            y = math.floor(y - 2),
-            w = 10,
-            h = 2
-        }
+    if not route then
+        print("unknown route: " .. tostring(routeName))
+        return
     end
 
-    function scene:isOnFloor(footRect)
-        if not self.images.base then
-            return true
-        end
+    local args = { ... }
 
-        for sx = footRect.x, footRect.x + footRect.w - 1, 2 do
-            for sy = footRect.y, footRect.y + footRect.h - 1 do
-                if sx < 0 or sx >= 400 or sy < 0 or sy >= 240 then
-                    return false
-                end
-
-                local sample = self.images.base:sample(sx, sy)
-                if sample ~= gfx.kColorWhite then
-                    return false
-                end
-            end
-        end
-
-        return true
-    end
-
-    function scene:isBlocked(x, y)
-        local footRect = self:getFootRect(x, y)
-
-        if not self:isOnFloor(footRect) then
-            return true
-        end
-
-        for i = 1, #self.blockRects do
-            if GameUtils.rectsOverlap(footRect, self.blockRects[i]) then
-                return true
-            end
-        end
-
-        if self.state.lobbyTrashPile and GameUtils.rectsOverlap(footRect, lobbyObjectBBoxes.trash_pile) then
-            return true
-        end
-
-        return false
-    end
-
-    function scene:getNearbyInteractive()
-        local best = nil
-        local bestDist = 999
-
-        for i = 1, #self.interactives do
-            local item = self.interactives[i]
-            local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, item.zone)
-            if d < bestDist then
-                best = item
-                bestDist = d
-            end
-        end
-
-        if best and bestDist <= 5 then
-            return best
-        end
-
-        return nil
-    end
-
-    function scene:updateMovement()
-        local dx = 0
-        local dy = 0
-
-        if playdate.buttonIsPressed(playdate.kButtonLeft) then
-            dx = dx - 1
-        end
-
-        if playdate.buttonIsPressed(playdate.kButtonRight) then
-            dx = dx + 1
-        end
-
-        if playdate.buttonIsPressed(playdate.kButtonUp) then
-            dy = dy - 1
-        end
-
-        if playdate.buttonIsPressed(playdate.kButtonDown) then
-            dy = dy + 1
-        end
-
-        if dx ~= 0 and dy ~= 0 then
-            dx = dx * 0.7071
-            dy = dy * 0.7071
-        end
-
-        local nextX = self.player.footX + dx * self.player.speed
-        if not self:isBlocked(nextX, self.player.footY) then
-            self.player.footX = nextX
-        end
-
-        local nextY = self.player.footY + dy * self.player.speed
-        if not self:isBlocked(self.player.footX, nextY) then
-            self.player.footY = nextY
-        end
-    end
-
-    function scene:update(dt)
-        if self.dialogue then
-            if playdate.buttonJustPressed(playdate.kButtonA) then
-                if GameUtils.advanceDialogue(self.dialogue) then
-                    self.dialogue = nil
-                end
-            end
-            return
-        end
-
-        self:updateMovement()
-
-        if self.state.heldItem and playdate.buttonJustPressed(playdate.kButtonB) then
-            Game:dropHeldItemFromLobby()
-            return
-        end
-
-        if playdate.buttonJustPressed(playdate.kButtonA) then
-            local interactive = self:getNearbyInteractive()
-            if interactive then
-                interactive.action(self)
-                return
-            end
-
-            if self.state.heldItem == "needle" then
-                Game:switchScene(function(nextState)
-                    return newBrainMiniGameScene(nextState)
-                end)
-                return
-            end
-        end
-    end
-
-    function scene:drawPrompt()
-    local interactive = self:getNearbyInteractive()
-    local font = Game.fonts.prompt or gfx.getSystemFont()
-
-    local safeRect = {
-        x = 112,
-        y = 26,
-        w = 176,
-        h = 182
-    }
-
-    local function drawClampedPrompt(text, anchorX, anchorY)
-        local padX = 2
-        local padY = 1
-        local w = font:getTextWidth(text)
-        local h = font:getHeight()
-
-        local x = GameUtils.clamp(anchorX, safeRect.x + padX, safeRect.x + safeRect.w - w - padX)
-        local y = GameUtils.clamp(anchorY, safeRect.y + padY, safeRect.y + safeRect.h - h - padY)
-
-        GameUtils.drawTextWithUnderlay(text, x, y, font)
-    end
-
-    if interactive then
-        drawClampedPrompt(interactive.prompt, interactive.anchor.x, interactive.anchor.y)
-    elseif self.state.heldItem == "needle" then
-        drawClampedPrompt("A: use", 118, 30)
-        drawClampedPrompt("B: drop", 118, 44)
-    elseif self.state.heldItem then
-        drawClampedPrompt("holding", 118, 30)
-    end
-    end
-
-    function scene:drawPlayer()
-        local image = self.state.replaceSueWithDemon and self.images.demon or self.images.sue
-        if not image then
-            return
-        end
-
-        local w, h = image:getSize()
-        image:draw(math.floor(self.player.footX - w / 2), math.floor(self.player.footY - h))
-
-        if self.state.heldItem == "needle" and self.images.needle then
-            local bbox = { x = 221, y = 158, w = 31, h = 30 }
-            local targetX = math.floor(self.player.footX - math.floor(bbox.w / 2))
-            local targetY = math.floor(self.player.footY - h + 10)
-            GameUtils.drawShiftedFullScreenImage(self.images.needle, bbox, targetX, targetY)
-        end
-    end
-
-    function scene:draw()
-        gfx.clear(gfx.kColorBlack)
-
-        if self.images.base then self.images.base:draw(0, 0) end
-        if self.images.borders then self.images.borders:draw(0, 0) end
-        if self.images.bed then self.images.bed:draw(0, 0) end
-        if self.images.lamp then self.images.lamp:draw(0, 0) end
-        if self.images.window then self.images.window:draw(0, 0) end
-        if self.images.table then self.images.table:draw(0, 0) end
-        if self.images.trashBin then self.images.trashBin:draw(0, 0) end
-        if self.images.plant then self.images.plant:draw(0, 0) end
-        if self.images.door then self.images.door:draw(0, 0) end
-
-        if self.state.lobbyTrashPile and self.images.trashPile then
-            self.images.trashPile:draw(0, 0)
-        end
-
-        self:drawPlayer()
-        self:drawPrompt()
-        GameUtils.drawDialogue(self.dialogue)
-    end
-
-    return scene
-end
-
-function newWindowScene(state)
-    local scene = {}
-
-    scene.state = state
-    scene.musicPath = "png_and_wavs/window_view/a_gust_of_odd_wind"
-    scene.windowAnim = GameUtils.loadAnim("png_and_wavs/window_view/window_animated.gif", 10, true)
-    scene.dialogue = GameUtils.makeDialogue("...")
-
-    function scene:update(dt)
-        if self.windowAnim then
-            self.windowAnim:update(dt)
-        end
-
-        if playdate.buttonJustPressed(playdate.kButtonA) and self.dialogue then
-            if GameUtils.advanceDialogue(self.dialogue) then
-                self.dialogue = nil
-            end
-        end
-
-        if playdate.buttonJustPressed(playdate.kButtonB) then
-            Game:switchScene(function(nextState)
-                return newLobbyScene(nextState)
-            end)
-        end
-    end
-
-    function scene:draw()
-        gfx.clear(gfx.kColorBlack)
-
-        if self.windowAnim then
-            self.windowAnim:draw(0, 0)
-        end
-
-        GameUtils.drawDialogue(self.dialogue)
-    end
-
-    return scene
+    self:setScene(function(state)
+        return route(state, unpackFn(args))
+    end)
 end
 
 Game:loadFonts()
 Game:loadSharedAssets()
-Game:setScene(function(state)
-    return newTitleScene(state)
-end)
+Game:go("title")
 
 function playdate.update()
     local now = playdate.getCurrentTimeMilliseconds()

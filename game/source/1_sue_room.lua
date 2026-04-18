@@ -10,130 +10,22 @@ local level1ObjectBBoxes = {
     door = { x = 120, y = 201, w = 44, h = 9 }
 }
 
-function newTitleScene(state)
-    local scene = {}
-
-    scene.state = state
-    scene.musicPath = "png_and_wavs/title_screen/alienazzbeat"
-
-    scene.warningImage = GameUtils.loadImage("png_and_wavs/title_screen/warning_v1.png")
-    scene.introAnim = GameUtils.loadAnim("png_and_wavs/title_screen/brain for intro screen with buttons.gif", 10, true, 0.5)
-
-    scene.phase = "warning"
-    scene.timer = 0
-    scene.warningDuration = 5.0
-    scene.crossfadeDuration = 0.75
-
-    function scene:update(dt)
-        if GameUtils.skipComboJustPressed() then
-            if self.phase == "warning" or self.phase == "crossfade" or self.phase == "warningReplay" then
-                self.phase = "intro"
-                self.timer = 0
-                if self.introAnim then
-                    self.introAnim:reset()
-                end
-                return
-            end
-
-            if self.phase == "intro" then
-                Game:switchScene(function(nextState)
-                    return newNightIntroScene(nextState)
-                end)
-                return
-            end
-        end
-
-        if self.phase == "warning" then
-            self.timer = self.timer + dt
-            if self.timer >= self.warningDuration then
-                self.phase = "crossfade"
-                self.timer = 0
-            end
-            return
-        end
-
-        if self.phase == "crossfade" then
-            self.timer = self.timer + dt
-            self.introAnim:update(dt)
-
-            if self.timer >= self.crossfadeDuration then
-                self.phase = "intro"
-                self.timer = 0
-            end
-            return
-        end
-
-        if self.phase == "warningReplay" then
-            if playdate.buttonJustPressed(playdate.kButtonA) then
-                self.phase = "intro"
-                self.timer = 0
-                if self.introAnim then
-                    self.introAnim:reset()
-                end
-            end
-            return
-        end
-
-        if self.phase == "intro" then
-            self.introAnim:update(dt)
-
-            if playdate.buttonJustPressed(playdate.kButtonA) then
-                Game:switchScene(function(nextState)
-                    return newNightIntroScene(nextState)
-                end)
-                return
-            end
-
-            if playdate.buttonJustPressed(playdate.kButtonB) then
-                self.phase = "warningReplay"
-                self.timer = 0
-                return
-            end
-        end
-    end
-
-    function scene:draw()
-        gfx.clear(gfx.kColorBlack)
-
-        if self.phase == "warning" or self.phase == "warningReplay" then
-            if self.warningImage then
-                self.warningImage:draw(0, 0)
-            end
-            return
-        end
-
-        if self.phase == "crossfade" then
-            local alpha = GameUtils.clamp(self.timer / self.crossfadeDuration, 0, 1)
-
-            if self.warningImage then
-                self.warningImage:drawFaded(0, 0, 1 - alpha, gfx.image.kDitherTypeBayer8x8)
-            end
-
-            if self.introAnim then
-                self.introAnim:drawFaded(0, 0, alpha)
-            end
-
-            return
-        end
-
-        if self.introAnim then
-            self.introAnim:draw(0, 0)
-        end
-    end
-
-    return scene
-end
-
 function newWindowSunriseScene(state)
     local scene = {}
 
     scene.state = state
-    scene.musicPath = "png_and_wavs/window_view/a_gust_of_odd_wind"
-    scene.anim = GameUtils.loadAnim("png_and_wavs/window_view/window_sunrise_animation.gif", 10, false, 1.0)
+    scene.musicPath = "png_and_wavs/window_view/birds_morning"
+    scene.anim = GameUtils.loadAnim("png_and_wavs/window_view/window_sunrise_animation.gif", 10, false, 0.80)
 
     function scene:update(dt)
         if self.anim then
             self.anim:update(dt)
+
+            if self.anim.finished then
+                Game:switchScene(function(nextState)
+                    return newBreakfastMateoScene(nextState)
+                end)
+            end
         end
     end
 
@@ -213,7 +105,7 @@ function newNightMiniGameScene(state)
     scene.bg = GameUtils.loadImage("png_and_wavs/night/night_minigame_config.png")
     scene.overlay = GameUtils.loadImage("png_and_wavs/night/night_minigame_fov.png")
     scene.sleepyMeter = GameUtils.loadImage("png_and_wavs/night/sleepy_meter.png")
-    scene.demonImage = GameUtils.loadImage("png_and_wavs/night/demon_64x64") or GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_64x64")
+    scene.demonImage = GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_64x64")
 
     scene.overlayX = 0
     scene.overlayY = 0
@@ -228,7 +120,7 @@ function newNightMiniGameScene(state)
     scene.fovBaseY = 120
     scene.fovRadius = 45
 
-    scene.meterInterior = { -- change height? its not full #TODO
+    scene.meterInterior = {
         x = 34,
         y = 47,
         w = 33,
@@ -255,42 +147,42 @@ function newNightMiniGameScene(state)
     end
 
     function scene:anyDemonVisible()
-    if self.currentDemon == nil then
-        return false
-    end
+        if self.currentDemon == nil then
+            return false
+        end
 
-    local cx, cy = self:getFovCenter()
+        local cx, cy = self:getFovCenter()
 
-    return self:circleRectIntersects(
-        cx,
-        cy,
-        self.fovRadius,
-        self.currentDemon.x,
-        self.currentDemon.y,
-        64,
-        64
-    )
+        return self:circleRectIntersects(
+            cx,
+            cy,
+            self.fovRadius,
+            self.currentDemon.x,
+            self.currentDemon.y,
+            64,
+            64
+        )
     end
 
     function scene:spawnDemonInFov()
-    local cx, cy = self:getFovCenter()
+        local cx, cy = self:getFovCenter()
 
-    local angle = math.random() * math.pi * 2
-    local radius = math.random() * (self.fovRadius * 0.6)
+        local angle = math.random() * math.pi * 2
+        local radius = math.random() * (self.fovRadius * 0.6)
 
-    local centerX = cx + math.cos(angle) * radius
-    local centerY = cy + math.sin(angle) * radius
+        local centerX = cx + math.cos(angle) * radius
+        local centerY = cy + math.sin(angle) * radius
 
-    local demonX = math.floor(centerX - 32)
-    local demonY = math.floor(centerY - 32)
+        local demonX = math.floor(centerX - 32)
+        local demonY = math.floor(centerY - 32)
 
-    demonX = GameUtils.clamp(demonX, 0, 400 - 64)
-    demonY = GameUtils.clamp(demonY, 0, 240 - 64)
+        demonX = GameUtils.clamp(demonX, 0, 400 - 64)
+        demonY = GameUtils.clamp(demonY, 0, 240 - 64)
 
-    self.currentDemon = {
-        x = demonX,
-        y = demonY
-    }
+        self.currentDemon = {
+            x = demonX,
+            y = demonY
+        }
     end
 
     function scene:updateMovement(dt)
@@ -324,24 +216,24 @@ function newNightMiniGameScene(state)
     end
 
     function scene:updateSleepiness(dt)
-    local visible = self:anyDemonVisible()
+        local visible = self:anyDemonVisible()
 
-    if visible then
-        self.sleepiness = self.sleepiness - self.drainRate * dt
-    else
-        self.sleepiness = self.sleepiness + self.fillRate * dt
-    end
+        if visible then
+            self.sleepiness = self.sleepiness - self.drainRate * dt
+        else
+            self.sleepiness = self.sleepiness + self.fillRate * dt
+        end
 
-    self.sleepiness = GameUtils.clamp(self.sleepiness, 0, 1)
+        self.sleepiness = GameUtils.clamp(self.sleepiness, 0, 1)
 
-    if self.sleepiness >= 1 then
-        Game:switchScene(function(nextState)
-            return newCatchingZsScene(nextState)
-        end)
-        return true
-    end
+        if self.sleepiness >= 1 then
+            Game:switchScene(function(nextState)
+                return newCatchingZsScene(nextState)
+            end)
+            return true
+        end
 
-    return false
+        return false
     end
 
     function scene:drawSleepyMeter()
@@ -378,9 +270,7 @@ function newNightMiniGameScene(state)
             self.bg:draw(0, 0)
         end
 
-        if 
-            self.demonImage and self.currentDemon 
-        then
+        if self.demonImage and self.currentDemon then
             self.demonImage:draw(self.currentDemon.x, self.currentDemon.y)
         end
 
@@ -414,14 +304,18 @@ function newLevel1WindowScene(state)
     scene.state = state
     scene.musicPath = "png_and_wavs/window_view/a_gust_of_odd_wind"
     scene.windowAnim = GameUtils.loadAnim("png_and_wavs/window_view/window_animated.gif", 10, true, 1.0)
+    scene.dialogue = nil
 
     function scene:update(dt)
-        self.windowAnim:update(dt)
+        if self.windowAnim then
+            self.windowAnim:update(dt)
+        end
 
-        if playdate.buttonJustPressed(playdate.kButtonA) and self.dialogue then
-            if GameUtils.advanceDialogue(self.dialogue) then
+        if self.dialogue then
+            if GameUtils.handleDialogueInput(self.dialogue) then
                 self.dialogue = nil
             end
+            return
         end
 
         if playdate.buttonJustPressed(playdate.kButtonB) then
@@ -433,7 +327,11 @@ function newLevel1WindowScene(state)
 
     function scene:draw()
         gfx.clear(gfx.kColorBlack)
-        self.windowAnim:draw(0, 0)
+
+        if self.windowAnim then
+            self.windowAnim:draw(0, 0)
+        end
+
         GameUtils.drawDialogue(self.dialogue)
     end
 
@@ -570,10 +468,11 @@ function newLevel1Scene(state)
     if scene.state.level1 == nil then
         scene.state.level1 = {
             lampOff = false,
-            lobbyDoorLocked = true
+            lobbyDoorLocked = true,
+            breakfastDone = false
         }
-    elseif scene.state.level1.lobbyDoorLocked == nil then
-        scene.state.level1.lobbyDoorLocked = false
+    elseif scene.state.level1.breakfastDone == nil then
+        scene.state.level1.breakfastDone = false
     end
 
     scene.images = {
@@ -589,12 +488,11 @@ function newLevel1Scene(state)
         door = GameUtils.loadImage("png_and_wavs/lobby/door"),
 
         sueIdle = GameUtils.loadImage("png_and_wavs/0_universal_sprites/sue_32x40"),
-
         sueWalkDown = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_down.gif", 10, true, 1.0),
         sueWalkLeft = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_left.gif", 10, true, 1.0),
         sueWalkRight = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_right.gif", 10, true, 1.0),
         sueWalkUp = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_up.gif", 10, true, 1.0),
-        
+
         demon = GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_64x64"),
         needle = GameUtils.loadImage("png_and_wavs/trash_can/needle")
     }
@@ -667,33 +565,13 @@ function newLevel1Scene(state)
     function scene:getNearbyInteractive()
         local interactives = {
             {
-                name = "window",
-                prompt = "A: Look Outside",
-                zone = { x = 154, y = 50, w = 94, h = 24 },
-                anchor = { x = 250, y = 52 },
-                action = function(selfScene)
-                    Game:switchScene(function(nextState)
-                        return newLevel1WindowScene(nextState)
-                    end)
-                end
-            },
-            {
-                name = "lamp",
-                prompt = self.state.level1.lampOff and "A: Turn On" or "A: Turn Off",
-                zone = { x = 109, y = 37, w = 42, h = 52 },
-                anchor = { x = 150, y = 48 },
-                action = function(selfScene)
-                    selfScene.state.level1.lampOff = not selfScene.state.level1.lampOff
-                end
-            },
-            {
                 name = "door",
                 prompt = "A: Inspect Door",
                 zone = { x = 114, y = 196, w = 56, h = 18 },
                 anchor = { x = 82, y = 194 },
                 action = function(selfScene)
                     if selfScene.state.level1.lobbyDoorLocked then
-                        selfScene.dialogue = GameUtils.makeDialogue("the nurses would yell at me to lie down...")
+                        selfScene.dialogue = GameUtils.makeDialogue("the nurses would yell at me if i got up")
                         return
                     end
 
@@ -703,6 +581,29 @@ function newLevel1Scene(state)
                 end
             }
         }
+
+        if not self.state.level1.breakfastDone then
+            interactives[#interactives + 1] = {
+                name = "window",
+                prompt = "A: Look Outside",
+                zone = { x = 154, y = 50, w = 94, h = 24 },
+                anchor = { x = 250, y = 52 },
+                action = function(selfScene)
+                    Game:switchScene(function(nextState)
+                        return newLevel1WindowScene(nextState)
+                    end)
+                end
+            }
+
+            interactives[#interactives + 1] = {
+                name = "lamp",
+                prompt = self.state.level1.lampOff and "A: Turn On" or "A: Turn Off",
+                zone = { x = 109, y = 37, w = 42, h = 52 },
+                anchor = { x = 150, y = 48 },
+                action = function(selfScene)
+                    selfScene.state.level1.lampOff = not selfScene.state.level1.lampOff
+                end
+            }
 
         if self.state.level1.lampOff then
             interactives[#interactives + 1] = {
@@ -716,6 +617,7 @@ function newLevel1Scene(state)
                     end)
                 end
             }
+            end
         end
 
         local best = nil
