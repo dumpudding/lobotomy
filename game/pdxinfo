@@ -1,5 +1,5 @@
 name=Lobotomy
-version=20260408
-author=Eunice
-description=A game about ... I won't spoil it for you :)
-bundleID=com.pudding.mygame
+version=20260420f
+author=pudding (eunice)
+description=self-contained title.
+imagePath=launch_assets
