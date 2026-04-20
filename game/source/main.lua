@@ -5,6 +5,7 @@ import "CoreLibs/crank"
 import "1_sue_room"
 import "1-1_breakfast"
 import "2_floor"
+import "3_floor"
 import "3-1_trash_bin"
 import "4_brain_mini_game"
 
@@ -17,6 +18,150 @@ local unpackFn = table.unpack or unpack
 math.randomseed(playdate.getSecondsSinceEpoch())
 
 GameUtils = {}
+
+local pd <const> = playdate
+
+storyFlags = storyFlags or {}
+storyFlags.breakfastDone = storyFlags.breakfastDone or false
+storyFlags.breakfastSkipped = storyFlags.breakfastSkipped or false
+storyFlags.lobbyDoorUnlocked = storyFlags.lobbyDoorUnlocked or false
+
+local afterBreakfastSkipHoldFrames = 0
+local afterBreakfastSkipTriggered = false
+local AFTER_BREAKFAST_SKIP_FRAMES <const> = 10
+
+local function skipToAfterBreakfastComboHeld()
+    return pd.buttonIsPressed(pd.kButtonA)
+        and pd.buttonIsPressed(pd.kButtonB)
+        and pd.buttonIsPressed(pd.kButtonLeft)
+        and pd.buttonIsPressed(pd.kButtonDown)
+end
+
+local function applyAfterBreakfastStoryState()
+    storyFlags.breakfastDone = true
+    storyFlags.breakfastSkipped = true
+    storyFlags.lobbyDoorUnlocked = true
+
+    breakfastDone = true
+    breakfastCompleted = true
+    lobbyDoorUnlocked = true
+    doorUnlocked = true
+
+    lampInteractable = false
+    windowInteractable = false
+    bedInteractable = false
+
+    canInteractLamp = false
+    canInteractWindow = false
+    canInteractBed = false
+
+    showLampOffDither = false
+    lampOffDitherVisible = false
+
+    if playerState then
+        playerState.breakfastDone = true
+        playerState.lobbyDoorUnlocked = true
+    end
+end
+
+local function stopSkipAudio()
+    if currentMusic and currentMusic.stop then
+        currentMusic:stop()
+    end
+
+    if music and music.stop then
+        music:stop()
+    end
+
+    if bgm and bgm.stop then
+        bgm:stop()
+    end
+
+    if breakfastMusic and breakfastMusic.stop then
+        breakfastMusic:stop()
+    end
+end
+
+local function goToAfterBreakfastScene()
+    stopSkipAudio()
+
+    if sceneManager and sceneManager.enter then
+        if SueRoom then
+            sceneManager:enter(SueRoom(), {
+                fromSkip = true,
+                afterBreakfast = true
+            })
+            return
+        end
+
+        if sue_room then
+            sceneManager:enter(sue_room, {
+                fromSkip = true,
+                afterBreakfast = true
+            })
+            return
+        end
+    end
+
+    if manager and manager.enter then
+        if SueRoom then
+            manager:enter(SueRoom(), {
+                fromSkip = true,
+                afterBreakfast = true
+            })
+            return
+        end
+
+        if sue_room then
+            manager:enter(sue_room, {
+                fromSkip = true,
+                afterBreakfast = true
+            })
+            return
+        end
+    end
+
+    if setScene then
+        if SueRoom then
+            setScene(SueRoom(), {
+                fromSkip = true,
+                afterBreakfast = true
+            })
+            return
+        end
+
+        if sue_room then
+            setScene(sue_room, {
+                fromSkip = true,
+                afterBreakfast = true
+            })
+            return
+        end
+    end
+
+    print("skip worked, but no known scene switch function was found")
+end
+
+function updateGlobalAfterBreakfastSkip()
+    if storyFlags.breakfastDone then
+        afterBreakfastSkipHoldFrames = 0
+        afterBreakfastSkipTriggered = false
+        return
+    end
+
+    if skipToAfterBreakfastComboHeld() then
+        afterBreakfastSkipHoldFrames = afterBreakfastSkipHoldFrames + 1
+
+        if afterBreakfastSkipHoldFrames >= AFTER_BREAKFAST_SKIP_FRAMES and not afterBreakfastSkipTriggered then
+            afterBreakfastSkipTriggered = true
+            applyAfterBreakfastStoryState()
+            goToAfterBreakfastScene()
+        end
+    else
+        afterBreakfastSkipHoldFrames = 0
+        afterBreakfastSkipTriggered = false
+    end
+end
 
 function GameUtils.isSkipComboDown()
     return
@@ -31,6 +176,14 @@ function GameUtils.skipComboJustPressed()
     local fired = down and not Game.debug.skipComboWasDown
     Game.debug.skipComboWasDown = down
     return fired
+end
+
+function GameUtils.isFloor3WarpComboDown()
+    return
+        playdate.buttonIsPressed(playdate.kButtonA) and
+        playdate.buttonIsPressed(playdate.kButtonB) and
+        playdate.buttonIsPressed(playdate.kButtonLeft) and
+        playdate.buttonIsPressed(playdate.kButtonDown)
 end
 
 function GameUtils.clamp(v, lo, hi)
@@ -413,7 +566,8 @@ Game = {
     assets = {},
 
     debug = {
-        skipComboWasDown = false
+        skipComboWasDown = false,
+        floor3WarpWasDown = false
     },
 
     state = {
@@ -551,6 +705,19 @@ function Game:switchScene(factory)
     self:setScene(factory)
 end
 
+function Game:updateGlobalFloor3Warp()
+    local down = GameUtils.isFloor3WarpComboDown()
+    local fired = down and not self.debug.floor3WarpWasDown
+    self.debug.floor3WarpWasDown = down
+
+    if not fired then
+        return false
+    end
+
+    self:go("floor3Hallway")
+    return true
+end
+
 function Game:dropHeldItemFromLobby()
     local held = self.state.heldItem
     if held == nil then
@@ -613,6 +780,14 @@ Game.routes = {
         return newFloor2TvRoomScene(state)
     end,
 
+    floor3Waiting = function(state, entry)
+        return newFloor3WaitingRoomScene(state, entry)
+    end,
+
+    floor3Hallway = function(state, entry)
+        return newFloor3HallwayScene(state, entry)
+    end,
+
     trashBin = function(state)
         return newTrashScene(state)
     end,
@@ -646,7 +821,9 @@ function playdate.update()
     local dt = (now - Game.lastTimeMs) / 1000
     Game.lastTimeMs = now
 
-    if Game.scene and Game.scene.update then
+    local warped = Game:updateGlobalFloor3Warp()
+
+    if not warped and Game.scene and Game.scene.update then
         Game.scene:update(dt)
     end
 

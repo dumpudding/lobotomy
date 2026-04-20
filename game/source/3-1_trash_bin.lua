@@ -1,10 +1,21 @@
 local gfx = playdate.graphics
+local pd <const> = playdate
 
 function newTrashScene(state)
     local scene = {}
 
     scene.state = state
     scene.musicPath = "png_and_wavs/trash_can/trash_panda"
+
+    if scene.state.trashItems == nil then
+        scene.state.trashItems = {
+            needle = "bin",
+            gloves = "bin",
+            vial = "bin",
+            scissors = "bin",
+            gauze = "bin"
+        }
+    end
 
     scene.images = {
         base = GameUtils.loadImage("png_and_wavs/trash_can/empty_bin"),
@@ -41,7 +52,7 @@ function newTrashScene(state)
         gauze = {
             bbox = { x = 153, y = 79, w = 25, h = 26 },
             promptAnchor = { x = 118, y = 84 },
-            line = "would be useful if i was profusely bleeding… but then again, it’s probably dirty"
+            line = "would be useful if i was profusely bleeding… but then again, it's probably dirty"
         }
     }
 
@@ -53,13 +64,11 @@ function newTrashScene(state)
 
     scene.dialogue = nil
     scene.fling = nil
+    scene.flingAccumulator = 0
+    scene.lastCrankDirection = 1
 
     function scene:getItemImage(name)
         return self.images[name]
-    end
-
-    function scene:getHeldItem()
-        return self.state.heldItem
     end
 
     function scene:getNearbyItemName()
@@ -71,7 +80,7 @@ function newTrashScene(state)
         local bestDist = 999
 
         for name, location in pairs(self.state.trashItems) do
-            if location == "bin" then
+            if location == "bin" and self.itemData[name] ~= nil then
                 local bbox = self.itemData[name].bbox
                 local d = GameUtils.pointRectDistance(self.cursor.x, self.cursor.y, bbox)
                 if d < bestDist then
@@ -81,16 +90,16 @@ function newTrashScene(state)
             end
         end
 
-        if bestName and bestDist <= 5 then
+        if bestName ~= nil and bestDist <= 6 then
             return bestName
         end
 
         return nil
     end
 
-    function scene:startFling(change)
+    function scene:startFling(direction)
         local held = self.state.heldItem
-        if not held then
+        if held == nil or self.itemData[held] == nil then
             return
         end
 
@@ -98,46 +107,48 @@ function newTrashScene(state)
         local startX = self.cursor.x - data.bbox.w - 4
         local startY = self.cursor.y - math.floor(data.bbox.h / 2)
 
+        self.dialogue = nil
         self.fling = {
             item = held,
             x = startX,
             y = startY,
-            vx = change >= 0 and 520 or -520,
-            vy = -80
+            vx = direction >= 0 and 620 or -620,
+            vy = -110
         }
     end
 
     function scene:updateFling(dt)
-        if not self.fling then
+        if self.fling == nil then
             return
         end
 
         self.fling.x = self.fling.x + self.fling.vx * dt
         self.fling.y = self.fling.y + self.fling.vy * dt
 
-        if self.fling.x < -60 or self.fling.x > 460 or self.fling.y < -60 or self.fling.y > 300 then
+        if self.fling.x < -80 or self.fling.x > 480 or self.fling.y < -80 or self.fling.y > 320 then
             local item = self.fling.item
             self.state.trashItems[item] = "gone"
             self.state.heldItem = nil
             self.state.lobbyTrashPile = true
             self.fling = nil
+            self.flingAccumulator = 0
         end
     end
 
     function scene:updateCursor()
-        if playdate.buttonIsPressed(playdate.kButtonLeft) then
+        if pd.buttonIsPressed(pd.kButtonLeft) then
             self.cursor.x = self.cursor.x - self.cursor.speed
         end
 
-        if playdate.buttonIsPressed(playdate.kButtonRight) then
+        if pd.buttonIsPressed(pd.kButtonRight) then
             self.cursor.x = self.cursor.x + self.cursor.speed
         end
 
-        if playdate.buttonIsPressed(playdate.kButtonUp) then
+        if pd.buttonIsPressed(pd.kButtonUp) then
             self.cursor.y = self.cursor.y - self.cursor.speed
         end
 
-        if playdate.buttonIsPressed(playdate.kButtonDown) then
+        if pd.buttonIsPressed(pd.kButtonDown) then
             self.cursor.y = self.cursor.y + self.cursor.speed
         end
 
@@ -145,36 +156,62 @@ function newTrashScene(state)
         self.cursor.y = GameUtils.clamp(self.cursor.y, 0, 239)
     end
 
+    function scene:returnFromTrash()
+        local returnScene = self.state.trashReturnScene
+        self.state.trashReturnScene = nil
+
+        if returnScene == "floor3Room" and newFloor3RoomScene ~= nil then
+            Game:switchScene(function(nextState)
+                return newFloor3RoomScene(nextState, "fromTrash")
+            end)
+            return
+        end
+
+        Game:switchScene(function(nextState)
+            return newLobbyScene(nextState)
+        end)
+    end
+
     function scene:update(dt)
         self:updateCursor()
         self:updateFling(dt)
 
-        if self.dialogue then
-            if playdate.buttonJustPressed(playdate.kButtonA) then
+        if self.state.heldItem ~= nil and self.fling == nil then
+            local change = pd.getCrankChange()
+
+            if math.abs(change) > 0.1 then
+                self.lastCrankDirection = change >= 0 and 1 or -1
+                self.flingAccumulator = self.flingAccumulator + math.abs(change)
+            end
+
+            if self.flingAccumulator >= 1 then
+                self:startFling(self.lastCrankDirection)
+                self.flingAccumulator = 0
+                return
+            end
+        end
+
+        if self.dialogue ~= nil then
+            if pd.buttonJustPressed(pd.kButtonA) then
                 if GameUtils.advanceDialogue(self.dialogue) then
                     self.dialogue = nil
                 end
             end
-        else
-            local nearby = self:getNearbyItemName()
-            if nearby and playdate.buttonJustPressed(playdate.kButtonA) then
-                self.state.heldItem = nearby
-                self.state.trashItems[nearby] = "held"
-                self.dialogue = GameUtils.makeDialogue(self.itemData[nearby].line)
-            end
+            return
         end
 
-        if self.state.heldItem and not self.fling then
-            local change = playdate.getCrankChange()
-            if math.abs(change) >= 8 then
-                self:startFling(change)
-            end
+        local nearby = self:getNearbyItemName()
+        if nearby ~= nil and pd.buttonJustPressed(pd.kButtonA) then
+            self.state.heldItem = nearby
+            self.state.trashItems[nearby] = "held"
+            self.flingAccumulator = 0
+            self.lastCrankDirection = 1
+            self.dialogue = GameUtils.makeDialogue(self.itemData[nearby].line)
+            return
         end
 
-        if playdate.buttonJustPressed(playdate.kButtonB) then
-            Game:switchScene(function(nextState)
-                return newLobbyScene(nextState)
-            end)
+        if pd.buttonJustPressed(pd.kButtonB) then
+            self:returnFromTrash()
         end
     end
 
@@ -182,7 +219,7 @@ function newTrashScene(state)
         for name, location in pairs(self.state.trashItems) do
             if location == "bin" then
                 local image = self:getItemImage(name)
-                if image then
+                if image ~= nil then
                     image:draw(0, 0)
                 end
             end
@@ -191,13 +228,13 @@ function newTrashScene(state)
 
     function scene:drawHeldItem()
         local held = self.state.heldItem
-        if not held or self.fling then
+        if held == nil or self.fling ~= nil or self.itemData[held] == nil then
             return
         end
 
         local image = self:getItemImage(held)
         local bbox = self.itemData[held].bbox
-        if not image or not bbox then
+        if image == nil or bbox == nil then
             return
         end
 
@@ -207,19 +244,19 @@ function newTrashScene(state)
     end
 
     function scene:drawFlingItem()
-        if not self.fling then
+        if self.fling == nil then
             return
         end
 
         local image = self:getItemImage(self.fling.item)
         local bbox = self.itemData[self.fling.item].bbox
-        if image and bbox then
+        if image ~= nil and bbox ~= nil then
             GameUtils.drawShiftedFullScreenImage(image, bbox, math.floor(self.fling.x), math.floor(self.fling.y))
         end
     end
 
     function scene:drawCursor()
-        if not self.images.hand then
+        if self.images.hand == nil then
             return
         end
 
@@ -232,58 +269,35 @@ function newTrashScene(state)
         local font = Game.fonts.prompt or gfx.getSystemFont()
         local nearby = self:getNearbyItemName()
 
-        font:drawText("B: exit trash", 8, 8)
+        GameUtils.drawTextWithUnderlay("B: exit trash", 8, 8, font)
 
-        if nearby then
+        if nearby ~= nil then
             local data = self.itemData[nearby]
             local prompt = "A: pick up"
             local w = font:getTextWidth(prompt)
             local x = GameUtils.clamp(data.promptAnchor.x, 4, 396 - w)
             local y = GameUtils.clamp(data.promptAnchor.y, 4, 228)
-            font:drawText(prompt, x, y)
+            GameUtils.drawTextWithUnderlay(prompt, x, y, font)
         end
 
-        if self.state.heldItem then
-            font:drawText("crank to fling aside", 274, 210)
+        if self.state.heldItem ~= nil and self.fling == nil then
+            GameUtils.drawTextWithUnderlay("crank to fling aside", 246, 210, font)
         end
     end
 
     function scene:draw()
-    gfx.clear(gfx.kColorBlack)
+        gfx.clear(gfx.kColorBlack)
 
-    if self.images.bin then
-        self.images.bin:draw(0, 0)
-    end
-
-    for _, item in ipairs(self.items) do
-        if item.state == "bin" and item.image then
-            item.image:draw(0, 0)
+        if self.images.base ~= nil then
+            self.images.base:draw(0, 0)
         end
-    end
 
-    if self.heldItem and self.heldItem.image then
-        local drawX = self.cursorX - 10
-        local drawY = self.cursorY - 8
-        self.heldItem.image:draw(drawX, drawY)
-    end
-
-    if self.handImage then
-        self.handImage:draw(self.cursorX, self.cursorY)
-    end
-
-    local font = Game.fonts.prompt or gfx.getSystemFont()
-    GameUtils.drawTextWithUnderlay("B: exit trash", 10, 8, font)
-
-    local hovered = self:getHoveredItem()
-    if hovered and self.heldItem == nil then
-        GameUtils.drawTextWithUnderlay("A: pick up", 10, 26, font)
-    end
-
-    if self.heldItem then
-        GameUtils.drawTextWithUnderlay("crank to fling aside", 252, 210, font)
-    end
-
-    GameUtils.drawDialogue(self.dialogue)
+        self:drawStaticItems()
+        self:drawHeldItem()
+        self:drawFlingItem()
+        self:drawCursor()
+        self:drawPrompt()
+        GameUtils.drawDialogue(self.dialogue)
     end
 
     return scene

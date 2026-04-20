@@ -18,15 +18,49 @@ local floor2Objects = {
 
     waiting = {
         fishTankStand = { x = 0, y = 83, w = 88, h = 43 },
+        fishTankBlock = { x = 0, y = 118, w = 58, h = 8 },
+        fishTankZone = { x = 0, y = 84, w = 78, h = 42 },
         leftPlant = { x = 260, y = 92, w = 22, h = 27 },
         rightPlant = { x = 394, y = 92, w = 6, h = 27 },
-        doubleDoor = { x = 286, y = 65, w = 64, h = 63 }
+        elevatorZone = { x = 286, y = 65, w = 64, h = 63 }
     },
 
     tv = {
-        tvStand = { x = 294, y = 26, w = 79, h = 67 }
+        tvStand = { x = 294, y = 26, w = 79, h = 67 },
+        tvZone = { x = 296, y = 8, w = 86, h = 84 },
+        tvInteractZone = { x = 280, y = 88, w = 108, h = 22 }
+    },
+
+    elevator = {
+        doorZone = { x = 150, y = 92, w = 100, h = 24 },
+        operatorZone = { x = 220, y = 118, w = 32, h = 54 },
+        operatorBlock = { x = 222, y = 150, w = 26, h = 24 }
     }
 }
+
+local floor2MusicPaths = {
+    room = "png_and_wavs/lobby/the_color_of_smog",
+    fishTank = "png_and_wavs/floor2/fishies",
+    tvPlaceholder = "png_and_wavs/floor2/ohno_my_crops",
+    profK = "png_and_wavs/floor2/esteemed-prof-k"
+}
+
+local function ensureFloor2State(state)
+    if state.floor2 == nil then
+        state.floor2 = {
+            evvieGone = false,
+            profKDone = false
+        }
+    end
+
+    if state.floor2.evvieGone == nil then
+        state.floor2.evvieGone = false
+    end
+
+    if state.floor2.profKDone == nil then
+        state.floor2.profKDone = false
+    end
+end
 
 local function makeFloor2Player(footX, footY)
     return {
@@ -49,28 +83,29 @@ local function loadSue64Images()
     }
 end
 
-local floor2MusicPaths = {
-    room = "png_and_wavs/lobby/the_color_of_smog",
-    fishTank = "png_and_wavs/floor2/fishies.wav",
-    tvPlaceholder = "png_and_wavs/floor2/ohno_my_crops.wav",
-    profK = "png_and_wavs/floor2/esteemed-prof-k.wav"
-}
+local function loadSue32Images()
+    return {
+        sueIdle = GameUtils.loadImage("png_and_wavs/0_universal_sprites/sue_32x40"),
+        sueWalkDown = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_down.gif", 10, true, 1.0),
+        sueWalkLeft = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_left.gif", 10, true, 1.0),
+        sueWalkRight = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_right.gif", 10, true, 1.0),
+        sueWalkUp = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/sue_32x40_up.gif", 10, true, 1.0)
+    }
+end
 
-local function ensureFloor2State(state)
-    if state.floor2 == nil then
-        state.floor2 = {
-            evvieGone = false,
-            profKDone = false
-        }
+local function playFloor2Music(path)
+    if Game and Game.playMusic then
+        Game:playMusic(path)
     end
+end
 
-    if state.floor2.evvieGone == nil then
-        state.floor2.evvieGone = false
-    end
-
-    if state.floor2.profKDone == nil then
-        state.floor2.profKDone = false
-    end
+local function getFootRect(x, y)
+    return {
+        x = math.floor(x - 6),
+        y = math.floor(y - 3),
+        w = 12,
+        h = 3
+    }
 end
 
 local function drawNpcImage(image, x, y)
@@ -133,25 +168,6 @@ local function drawFloor2TalkBox(ui)
     end
 end
 
-local function playFloor2Music(path)
-    if Game and Game.playMusic then
-        Game:playMusic(path)
-    end
-end
-
-local function getFootRect(x, y)
-    return {
-        x = math.floor(x - 6),
-        y = math.floor(y - 3),
-        w = 12,
-        h = 3
-    }
-end
-
-local function pointInRect(px, py, rect)
-    return px >= rect.x and px < rect.x + rect.w and py >= rect.y and py < rect.y + rect.h
-end
-
 local function drawSue64(scene)
     local imageToDraw = nil
 
@@ -177,6 +193,137 @@ local function drawSue64(scene)
 
     local w, h = imageToDraw:getSize()
     imageToDraw:draw(math.floor(scene.player.footX - w / 2), math.floor(scene.player.footY - h))
+end
+
+local function drawSue32At(imageSet, footX, footY)
+    if not imageSet or not imageSet.sueIdle then
+        return
+    end
+
+    local w, h = imageSet.sueIdle:getSize()
+    imageSet.sueIdle:draw(math.floor(footX - w / 2), math.floor(footY - h))
+end
+
+
+local function drawSue32(scene)
+    if not scene.images or not scene.images.sue then
+        return
+    end
+
+    local imageSet = scene.images.sue
+    local imageToDraw = nil
+
+    if scene.player.isMoving then
+        if scene.player.facing == "down" and imageSet.sueWalkDown then
+            imageToDraw = imageSet.sueWalkDown:getFrame()
+        elseif scene.player.facing == "left" and imageSet.sueWalkLeft then
+            imageToDraw = imageSet.sueWalkLeft:getFrame()
+        elseif scene.player.facing == "right" and imageSet.sueWalkRight then
+            imageToDraw = imageSet.sueWalkRight:getFrame()
+        elseif scene.player.facing == "up" and imageSet.sueWalkUp then
+            imageToDraw = imageSet.sueWalkUp:getFrame()
+        end
+    end
+
+    if imageToDraw == nil then
+        imageToDraw = imageSet.sueIdle
+    end
+
+    if imageToDraw == nil then
+        return
+    end
+
+    local w, h = imageToDraw:getSize()
+    imageToDraw:draw(math.floor(scene.player.footX - w / 2), math.floor(scene.player.footY - h))
+end
+
+local function drawPlaceholderElevatorNpc()
+    gfx.setColor(gfx.kColorBlack)
+    gfx.fillRoundRect(220, 118, 28, 58, 8)
+    gfx.fillCircleAtPoint(234, 114, 10)
+    gfx.setColor(gfx.kColorWhite)
+    gfx.fillCircleAtPoint(230, 112, 1)
+    gfx.fillCircleAtPoint(238, 112, 1)
+    gfx.setColor(gfx.kColorBlack)
+end
+
+local function updateSue32Movement(scene, dt)
+    local dx = 0
+    local dy = 0
+
+    if playdate.buttonIsPressed(playdate.kButtonLeft) then
+        dx = dx - 1
+    end
+
+    if playdate.buttonIsPressed(playdate.kButtonRight) then
+        dx = dx + 1
+    end
+
+    if playdate.buttonIsPressed(playdate.kButtonUp) then
+        dy = dy - 1
+    end
+
+    if playdate.buttonIsPressed(playdate.kButtonDown) then
+        dy = dy + 1
+    end
+
+    scene.player.isMoving = (dx ~= 0 or dy ~= 0)
+
+    if dx ~= 0 or dy ~= 0 then
+        if math.abs(dx) > math.abs(dy) then
+            if dx < 0 then
+                scene.player.facing = "left"
+            else
+                scene.player.facing = "right"
+            end
+        else
+            if dy < 0 then
+                scene.player.facing = "up"
+            else
+                scene.player.facing = "down"
+            end
+        end
+    end
+
+    if dx ~= 0 and dy ~= 0 then
+        dx = dx * 0.7071
+        dy = dy * 0.7071
+    end
+
+    local nextX = scene.player.footX + dx * scene.player.speed
+    if not scene:isBlocked(nextX, scene.player.footY) then
+        scene.player.footX = nextX
+    end
+
+    local nextY = scene.player.footY + dy * scene.player.speed
+    if not scene:isBlocked(scene.player.footX, nextY) then
+        scene.player.footY = nextY
+    end
+
+    if scene.player.isMoving then
+        local imageSet = scene.images.sue
+
+        if scene.player.facing == "down" and imageSet.sueWalkDown then
+            imageSet.sueWalkDown:update(dt)
+        elseif scene.player.facing == "left" and imageSet.sueWalkLeft then
+            imageSet.sueWalkLeft:update(dt)
+        elseif scene.player.facing == "right" and imageSet.sueWalkRight then
+            imageSet.sueWalkRight:update(dt)
+        elseif scene.player.facing == "up" and imageSet.sueWalkUp then
+            imageSet.sueWalkUp:update(dt)
+        end
+    end
+end
+
+local function drawFloor2PromptNearZone(prompt, zone)
+    local font = Game.fonts.prompt or gfx.getSystemFont()
+    local w = font:getTextWidth(prompt)
+    local h = font:getHeight()
+
+    local x = GameUtils.clamp(zone.x + zone.w + 6, 4, 396 - w)
+    local y = GameUtils.clamp(zone.y + math.floor((zone.h - h) / 2), 4, 228)
+
+    GameUtils.drawTextWithUnderlay(prompt, x, y, font)
 end
 
 local function updateSue64Movement(scene, dt)
@@ -251,6 +398,7 @@ local function makeBaseScene(state, footX, footY)
     scene.state = state
     scene.player = makeFloor2Player(footX, footY)
     scene.dialogue = nil
+    scene.blockRects = {}
 
     function scene:isInsideRoomBounds(footRect)
         return true
@@ -304,7 +452,7 @@ end
 function newFloor2HallwayScene(state)
     local scene = makeBaseScene(state, 30, 101)
 
-    scene.musicPath = "png_and_wavs/lobby/the_color_of_smog"
+    scene.musicPath = floor2MusicPaths.room
 
     scene.images = loadSue64Images()
     scene.images.base = GameUtils.loadImage("png_and_wavs/floor2/hallway_lvl2")
@@ -315,9 +463,6 @@ function newFloor2HallwayScene(state)
     scene.images.playThese = GameUtils.loadImage("png_and_wavs/floor2/play_these")
     scene.images.successIdiot = GameUtils.loadImage("png_and_wavs/floor2/success_idiot")
     scene.images.failureIdiot = GameUtils.loadImage("png_and_wavs/floor2/failure_idiot")
-
-    scene.blockRects = {
-    }
 
     function scene:isInsideRoomBounds(footRect)
         if footRect.x < 0 or footRect.x + footRect.w > 400 then
@@ -366,16 +511,16 @@ function newFloor2HallwayScene(state)
     end
 
     function scene:drawPrompt()
+        if self.dialogue then
+            return
+        end
+
         local interactive = self:getNearbyInteractive()
         if not interactive then
             return
         end
 
-        local font = Game.fonts.prompt or gfx.getSystemFont()
-        local w = font:getTextWidth(interactive.prompt)
-        local x = GameUtils.clamp(interactive.anchor.x, 4, 396 - w)
-        local y = GameUtils.clamp(interactive.anchor.y, 4, 228)
-        GameUtils.drawTextWithUnderlay(interactive.prompt, x, y, font)
+        drawFloor2PromptNearZone(interactive.prompt, interactive.promptZone or interactive.zone)
     end
 
     function scene:checkRoomTransitions()
@@ -385,8 +530,29 @@ function newFloor2HallwayScene(state)
             end)
             return
         end
+    end
 
-        -- mouse hole later
+    function scene:update(dt)
+        if self.dialogue then
+            if playdate.buttonJustPressed(playdate.kButtonA) then
+                if GameUtils.advanceDialogue(self.dialogue) then
+                    self.dialogue = nil
+                end
+            end
+            return
+        end
+
+        updateSue64Movement(self, dt)
+
+        if playdate.buttonJustPressed(playdate.kButtonA) then
+            local interactive = self:getNearbyInteractive()
+            if interactive then
+                interactive.action(self)
+                return
+            end
+        end
+
+        self:checkRoomTransitions()
     end
 
     function scene:draw()
@@ -397,86 +563,55 @@ function newFloor2HallwayScene(state)
         end
 
         drawSue64(self)
+        self:drawPrompt()
         GameUtils.drawDialogue(self.dialogue)
     end
 
     return scene
 end
 
-local function ensureFloor2State(state)
-    if state.floor2 == nil then
-        state.floor2 = {
-            evvieGone = false,
-            profKDone = false
-        }
-    end
-
-    if state.floor2.evvieGone == nil then
-        state.floor2.evvieGone = false
-    end
-
-    if state.floor2.profKDone == nil then
-        state.floor2.profKDone = false
-    end
-end
-
-local function drawNpcImage(image, x, y)
-    if image then
-        image:draw(math.floor(x), math.floor(y))
-    end
-end
-
-local function drawFloor2TalkBox(ui)
-    if not ui then
-        return
-    end
-
-    local font = Game.fonts.dialog or gfx.getSystemFont()
-
-    GameUtils.drawTextWithUnderlay(ui.text, 10, 182, font)
-
-    if ui.aText then
-        GameUtils.drawTextWithUnderlay("A: " .. ui.aText, 10, 200, font)
-    end
-
-    if ui.bText then
-        GameUtils.drawTextWithUnderlay("B: " .. ui.bText, 10, 218, font)
-    end
-end
-
-function newFloor2WaitingRoomScene(state, entry)
+function newFishTankPlaceholderScene(state)
     ensureFloor2State(state)
 
-    local spawnX = 96
-    local spawnY = 170
+    local scene = {}
 
-    if entry == "fromTvRoom" then
-        spawnX = 356
-        spawnY = 170
+    scene.state = state
+    scene.musicPath = floor2MusicPaths.fishTank
+
+    function scene:update(dt)
+        if playdate.buttonJustPressed(playdate.kButtonB) then
+            Game:switchScene(function(nextState)
+                return newFloor2WaitingRoomScene(nextState, "fromFishTank")
+            end)
+        end
     end
 
-    local scene = makeBaseScene(state, spawnX, spawnY)
+    function scene:draw()
+        gfx.clear(gfx.kColorBlack)
 
+        local font = Game.fonts.prompt or gfx.getSystemFont()
+        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+        font:drawText("B: back", 164, 112)
+        gfx.setImageDrawMode(gfx.kDrawModeCopy)
+    end
+
+    return scene
+end
+
+function newElevatorScene(state)
+    ensureFloor2State(state)
+
+    local scene = {}
+
+    scene.state = state
     scene.musicPath = floor2MusicPaths.room
 
-    scene.images = loadSue64Images()
-    scene.images.base = GameUtils.loadImage("png_and_wavs/floor2/waiting_room_lvl2")
-
-    scene.npcs = {
-        evvie = {
-            drawX = 24,
-            drawY = 98,
-            blockRect = { x = 24, y = 126, w = 56, h = 46 },
-            talkZone = { x = 12, y = 98, w = 76, h = 80 }
-        }
+    scene.images = {
+        base = GameUtils.loadImage("png_and_wavs/elevator/elevator"),
+        sue = loadSue32Images()
     }
 
-    scene.blockRects = {
-        { x = 0, y = 101, w = 86, h = 26 },
-        { x = 262, y = 95, w = 18, h = 25 },
-        { x = 386, y = 95, w = 14, h = 25 }
-    }
-
+    scene.player = makeFloor2Player(198, 178)
     scene.ui = nil
 
     function scene:setChoiceDialogue(text, aText, bText, onA, onB)
@@ -522,59 +657,321 @@ function newFloor2WaitingRoomScene(state, entry)
         return true
     end
 
-    function scene:getNearbyInteractive()
-        if self.state.floor2.evvieGone then
-            return nil
+    function scene:isInsideRoomBounds(footRect)
+        if footRect.x < 150 or footRect.x + footRect.w > 254 then
+            return false
         end
 
-        local item = {
-            name = "evvie",
-            prompt = "A: Talk",
-            zone = self.npcs.evvie.talkZone,
-            anchor = { x = 14, y = 182 },
+        if footRect.y < 118 or footRect.y + footRect.h > 186 then
+            return false
+        end
+
+        return true
+    end
+
+    function scene:isBlocked(x, y)
+        local footRect = getFootRect(x, y)
+
+        if not self:isInsideRoomBounds(footRect) then
+            return true
+        end
+
+        if GameUtils.rectsOverlap(footRect, floor2Objects.elevator.operatorBlock) then
+            return true
+        end
+
+        return false
+    end
+
+    function scene:getNearbyInteractive()
+        local candidates = {
+            {
+                name = "door",
+                prompt = "A: Exit Elevator",
+                zone = floor2Objects.elevator.doorZone,
+                action = function(selfScene)
+                    Game:switchScene(function(nextState)
+                        return newFloor2WaitingRoomScene(nextState, "fromElevator")
+                    end)
+                end
+            },
+            {
+                name = "operator",
+                prompt = "A: talk",
+                zone = floor2Objects.elevator.operatorZone,
+                action = function(selfScene)
+                    selfScene:setChoiceDialogue(
+                        "hey kid, which floor?",
+                        "2nd",
+                        "3rd",
+                        function(s)
+                            s:setMessageDialogue("you're already on the second floor, silly child.")
+                        end,
+                        function(s)
+                            s.ui = nil
+                            Game:go("floor3Waiting", "fromElevator")
+                        end
+                    )
+                end
+            }
+        }
+
+        local best = nil
+        local bestDist = 999
+
+        for i = 1, #candidates do
+            local item = candidates[i]
+            local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, item.zone)
+            if d < bestDist then
+                best = item
+                bestDist = d
+            end
+        end
+
+        if best and bestDist <= 14 then
+            return best
+        end
+
+        return nil
+    end
+
+    function scene:drawPrompt()
+        if self.ui then
+            return
+        end
+
+        local interactive = self:getNearbyInteractive()
+        if not interactive then
+            return
+        end
+
+        drawFloor2PromptNearZone(interactive.prompt, interactive.promptZone or interactive.zone)
+    end
+
+    function scene:update(dt)
+        if self:handleUiInput() then
+            return
+        end
+
+        updateSue32Movement(self, dt)
+
+        if playdate.buttonJustPressed(playdate.kButtonA) then
+            local interactive = self:getNearbyInteractive()
+            if interactive then
+                interactive.action(self)
+                return
+            end
+        end
+    end
+
+    function scene:draw()
+        gfx.clear(gfx.kColorWhite)
+
+        if self.images.base then
+            self.images.base:draw(0, 0)
+        end
+
+        drawPlaceholderElevatorNpc()
+        drawSue32(self)
+        self:drawPrompt()
+        drawFloor2TalkBox(self.ui)
+    end
+
+    return scene
+end
+
+function newTvPlaceholderScene(state)
+    ensureFloor2State(state)
+
+    local scene = {}
+
+    scene.state = state
+    scene.musicPath = floor2MusicPaths.tvPlaceholder
+
+    function scene:update(dt)
+        if playdate.buttonJustPressed(playdate.kButtonB) then
+            Game:switchScene(function(nextState)
+                return newFloor2TvRoomScene(nextState)
+            end)
+        end
+    end
+
+    function scene:draw()
+        gfx.clear(gfx.kColorBlack)
+
+        local font = Game.fonts.prompt or gfx.getSystemFont()
+        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+        font:drawText("B: back", 164, 112)
+        gfx.setImageDrawMode(gfx.kDrawModeCopy)
+    end
+
+    return scene
+end
+
+function newFloor2WaitingRoomScene(state, entry)
+    ensureFloor2State(state)
+
+    local spawnX = 96
+    local spawnY = 170
+
+    if entry == "fromTvRoom" then
+        spawnX = 356
+        spawnY = 170
+    elseif entry == "fromFishTank" then
+        spawnX = 96
+        spawnY = 170
+    elseif entry == "fromElevator" then
+        spawnX = 320
+        spawnY = 170
+    end
+
+    local scene = makeBaseScene(state, spawnX, spawnY)
+
+    scene.musicPath = floor2MusicPaths.room
+
+    scene.images = loadSue64Images()
+    scene.images.base = GameUtils.loadImage("png_and_wavs/floor2/waiting_room_lvl2")
+
+    scene.npcs = {
+        evvie = {
+            drawX = 24,
+            drawY = 98,
+            blockRect = { x = 24, y = 126, w = 56, h = 46 },
+            talkZone = { x = 12, y = 98, w = 76, h = 80 }
+        }
+    }
+
+    scene.ui = nil
+    scene.blockRects = {
+        floor2Objects.waiting.fishTankBlock,
+        { x = 262, y = 112, w = 18, h = 18 },
+        { x = 386, y = 112, w = 14, h = 18 }
+    }
+
+    function scene:setChoiceDialogue(text, aText, bText, onA, onB)
+        self.ui = {
+            text = text,
+            aText = aText,
+            bText = bText,
+            onA = onA,
+            onB = onB
+        }
+    end
+
+    function scene:setMessageDialogue(text, onClose)
+        self.ui = {
+            text = text,
+            onClose = onClose
+        }
+    end
+
+    function scene:handleUiInput()
+        if not self.ui then
+            return false
+        end
+
+        if self.ui.aText or self.ui.bText then
+            if playdate.buttonJustPressed(playdate.kButtonA) and self.ui.onA then
+                self.ui.onA(self)
+            elseif playdate.buttonJustPressed(playdate.kButtonB) and self.ui.onB then
+                self.ui.onB(self)
+            end
+            return true
+        end
+
+        if playdate.buttonJustPressed(playdate.kButtonA) or playdate.buttonJustPressed(playdate.kButtonB) then
+            local onClose = self.ui.onClose
+            self.ui = nil
+            if onClose then
+                onClose(self)
+            end
+            return true
+        end
+
+        return true
+    end
+
+    function scene:getNearbyInteractive()
+        local candidates = {}
+
+        if not self.state.floor2.evvieGone then
+            candidates[#candidates + 1] = {
+                name = "evvie",
+                prompt = "A: Talk",
+                zone = self.npcs.evvie.talkZone,
+                anchor = { x = 14, y = 182 },
+                action = function(selfScene)
+                    selfScene:setChoiceDialogue(
+                        "evvie: hey, sue, right? i'm evvie.",
+                        "hi evvie, nice to meet you!",
+                        "no, its not. go away.",
+                        function(s)
+                            s:setChoiceDialogue(
+                                "evvie: what's up?",
+                                "nothing...",
+                                "could i feed the fish?",
+                                function(s2)
+                                    s2:setMessageDialogue(
+                                        "evvie: okay, see you around.",
+                                        function(s3)
+                                            s3.state.floor2.evvieGone = true
+                                        end
+                                    )
+                                end,
+                                function(s2)
+                                    s2:setChoiceDialogue(
+                                        "evvie: sure, just 5 shakes of the fish food, got it?",
+                                        "okay",
+                                        nil,
+                                        function(s3)
+                                            s3.state.floor2.evvieGone = true
+                                            Game:switchScene(function(nextState)
+                                                return newFishTankPlaceholderScene(nextState)
+                                            end)
+                                        end,
+                                        nil
+                                    )
+                                end
+                            )
+                        end,
+                        function(s)
+                            s:setMessageDialogue(
+                                "evvie: oof.. okay?",
+                                function(s2)
+                                    s2.state.floor2.evvieGone = true
+                                end
+                            )
+                        end
+                    )
+                end
+            }
+        end
+
+        candidates[#candidates + 1] = {
+            name = "elevator",
+            prompt = "A: Enter Elevator",
+            zone = floor2Objects.waiting.elevatorZone,
             action = function(selfScene)
-                selfScene:setChoiceDialogue(
-                    'e: "hey, Sue, right? i\'m evvie."',
-                    "hi evvie, nice to meet you!",
-                    "no, its not. go away.",
-                    function(s)
-                        s:setChoiceDialogue(
-                            'e: "what\'s up?"',
-                            "nothing",
-                            "could i feed the fish?",
-                            function(s2)
-                                s2.ui = nil
-                            end,
-                            function(s2)
-                                s2:setChoiceDialogue(
-                                    'e: "sure, just 5 shakes of the fish food, got it?"',
-                                    "yep!",
-                                    nil,
-                                    function(s3)
-                                        Game:switchScene(function(nextState)
-                                            return newFishTankPlaceholderScene(nextState)
-                                        end)
-                                    end,
-                                    nil
-                                )
-                            end
-                        )
-                    end,
-                    function(s)
-                        s:setMessageDialogue(
-                            'e: "oof.. okay?"',
-                            function(s2)
-                                s2.state.floor2.evvieGone = true
-                            end
-                        )
-                    end
-                )
+                Game:switchScene(function(nextState)
+                    return newElevatorScene(nextState)
+                end)
             end
         }
 
-        local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, item.zone)
-        if d <= 10 then
-            return item
+        local best = nil
+        local bestDist = 999
+
+        for i = 1, #candidates do
+            local item = candidates[i]
+            local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, item.zone)
+            if d < bestDist then
+                best = item
+                bestDist = d
+            end
+        end
+
+        if best and bestDist <= 10 then
+            return best
         end
 
         return nil
@@ -629,16 +1026,16 @@ function newFloor2WaitingRoomScene(state, entry)
     end
 
     function scene:drawPrompt()
+        if self.ui then
+            return
+        end
+
         local interactive = self:getNearbyInteractive()
         if not interactive then
             return
         end
 
-        local font = Game.fonts.prompt or gfx.getSystemFont()
-        local w = font:getTextWidth(interactive.prompt)
-        local x = GameUtils.clamp(interactive.anchor.x, 4, 396 - w)
-        local y = GameUtils.clamp(interactive.anchor.y, 4, 228)
-        GameUtils.drawTextWithUnderlay(interactive.prompt, x, y, font)
+        drawFloor2PromptNearZone(interactive.prompt, interactive.promptZone or interactive.zone)
     end
 
     function scene:update(dt)
@@ -678,70 +1075,6 @@ function newFloor2WaitingRoomScene(state, entry)
     return scene
 end
 
-function newFishTankPlaceholderScene(state)
-    ensureFloor2State(state)
-
-    local scene = {}
-
-    scene.state = state
-    scene.musicPath = floor2MusicPaths.fishTank
-
-    function scene:update(dt)
-        if playdate.buttonJustPressed(playdate.kButtonB) then
-            self.state.floor2.evvieGone = true
-
-            if Game.go then
-                Game:go("lobby")
-            else
-                Game:switchScene(function(nextState)
-                    return newLevel1Scene(nextState)
-                end)
-            end
-        end
-    end
-
-    function scene:draw()
-        gfx.clear(gfx.kColorBlack)
-
-        local font = Game.fonts.prompt or gfx.getSystemFont()
-
-        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-        font:drawText("B: back to lobby", 122, 112)
-        gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    end
-
-    return scene
-end
-
-function newTvPlaceholderScene(state)
-    ensureFloor2State(state)
-
-    local scene = {}
-
-    scene.state = state
-    scene.musicPath = floor2MusicPaths.tvPlaceholder
-
-    function scene:update(dt)
-        if playdate.buttonJustPressed(playdate.kButtonB) then
-            Game:switchScene(function(nextState)
-                return newFloor2TvRoomScene(nextState)
-            end)
-        end
-    end
-
-    function scene:draw()
-        gfx.clear(gfx.kColorBlack)
-
-        local font = Game.fonts.prompt or gfx.getSystemFont()
-
-        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-        font:drawText("B: back", 164, 112)
-        gfx.setImageDrawMode(gfx.kDrawModeCopy)
-    end
-
-    return scene
-end
-
 function newFloor2TvRoomScene(state)
     ensureFloor2State(state)
 
@@ -756,22 +1089,16 @@ function newFloor2TvRoomScene(state)
     scene.npcs = {
         profK = {
             drawX = 18,
-            drawY = 2,
+            drawY = 8,
             blockRect = { x = 18, y = 68, w = 52, h = 30 },
-            talkZone = { x = 10, y = 2, w = 74, h = 98 }
+            talkZone = { x = 10, y = 6, w = 74, h = 98 }
         }
     }
 
-    scene.tvInteractive = {
-        zone = { x = 296, y = 8, w = 86, h = 84 },
-        anchor = { x = 292, y = 182 }
-    }
-
+    scene.ui = nil
     scene.blockRects = {
         floor2Objects.tv.tvStand
     }
-
-    scene.ui = nil
 
     function scene:setChoiceDialogue(text, aText, bText, onA, onB)
         self.ui = {
@@ -826,7 +1153,7 @@ function newFloor2TvRoomScene(state)
         if not self.state.floor2.profKDone then
             candidates[#candidates + 1] = {
                 name = "profK",
-                prompt = "A: Talk",
+                prompt = "A: talk",
                 zone = self.npcs.profK.talkZone,
                 anchor = { x = 14, y = 182 },
                 action = function(selfScene)
@@ -838,17 +1165,17 @@ function newFloor2TvRoomScene(state)
                         "who are you?",
                         function(s)
                             s:setChoiceDialogue(
-                                'pk: "no hi, how are you? well, it\'s hot in here and my feet would be sweaty."',
+                                "professor k: no hi, how are you? well, it's hot in here and my feet would be sweaty.",
                                 "my bad. how are you? who are you?",
                                 nil,
                                 function(s2)
                                     s2:setChoiceDialogue(
-                                        'pk: "call me dr. Kaltman *smirk*"',
-                                        "well it is nice to meet you.",
-                                        "bye.",
+                                        "professor k: call me professor k.",
+                                        "nice to meet you, professor k! *is this professor kaltman..?*",
+                                        "well, idc, bye.",
                                         function(s3)
                                             s3:setMessageDialogue(
-                                                'pk: "you too"',
+                                                "professor k: you too",
                                                 function(s4)
                                                     s4.state.floor2.profKDone = true
                                                     s4:restoreRoomMusic()
@@ -857,7 +1184,7 @@ function newFloor2TvRoomScene(state)
                                         end,
                                         function(s3)
                                             s3:setMessageDialogue(
-                                                'pk: "...what a weirdo..."',
+                                                "professor k: ...uh??",
                                                 function(s4)
                                                     s4.state.floor2.profKDone = true
                                                     s4:restoreRoomMusic()
@@ -871,12 +1198,12 @@ function newFloor2TvRoomScene(state)
                         end,
                         function(s)
                             s:setChoiceDialogue(
-                                'pk: "call me dr. Kaltman *smirk*"',
-                                "well it is nice to meet you.",
-                                "bye.",
+                                "professor k: call me professor k.",
+                                    "nice to meet you, professor k! *is this professor kaltman..?*",
+                                    "bye.",
                                 function(s2)
                                     s2:setMessageDialogue(
-                                        'pk: "you too"',
+                                        "professor k: you too",
                                         function(s3)
                                             s3.state.floor2.profKDone = true
                                             s3:restoreRoomMusic()
@@ -885,7 +1212,7 @@ function newFloor2TvRoomScene(state)
                                 end,
                                 function(s2)
                                     s2:setMessageDialogue(
-                                        'pk: "...what a weirdo..."',
+                                        "professor k: ...???",
                                         function(s3)
                                             s3.state.floor2.profKDone = true
                                             s3:restoreRoomMusic()
@@ -902,8 +1229,8 @@ function newFloor2TvRoomScene(state)
         candidates[#candidates + 1] = {
             name = "tv",
             prompt = "A: Interact",
-            zone = self.tvInteractive.zone,
-            anchor = self.tvInteractive.anchor,
+            zone = floor2Objects.tv.tvInteractZone,
+            promptZone = floor2Objects.tv.tvZone,
             action = function(selfScene)
                 Game:switchScene(function(nextState)
                     return newTvPlaceholderScene(nextState)
@@ -923,7 +1250,7 @@ function newFloor2TvRoomScene(state)
             end
         end
 
-        if best and bestDist <= 10 then
+        if best and bestDist <= 24 then
             return best
         end
 
@@ -963,7 +1290,7 @@ function newFloor2TvRoomScene(state)
     end
 
     function scene:checkRoomTransitions()
-        if self.player.footX <= 4 then
+        if self.player.footX <= 12 then
             Game:switchScene(function(nextState)
                 return newFloor2WaitingRoomScene(nextState, "fromTvRoom")
             end)
@@ -972,16 +1299,16 @@ function newFloor2TvRoomScene(state)
     end
 
     function scene:drawPrompt()
+        if self.ui then
+            return
+        end
+
         local interactive = self:getNearbyInteractive()
         if not interactive then
             return
         end
 
-        local font = Game.fonts.prompt or gfx.getSystemFont()
-        local w = font:getTextWidth(interactive.prompt)
-        local x = GameUtils.clamp(interactive.anchor.x, 4, 396 - w)
-        local y = GameUtils.clamp(interactive.anchor.y, 4, 228)
-        GameUtils.drawTextWithUnderlay(interactive.prompt, x, y, font)
+        drawFloor2PromptNearZone(interactive.prompt, interactive.promptZone or interactive.zone)
     end
 
     function scene:update(dt)
