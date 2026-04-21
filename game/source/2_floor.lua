@@ -99,6 +99,93 @@ local function playFloor2Music(path)
     end
 end
 
+local function loadDemonPointerAnim()
+    local anim = GameUtils.loadAnim("png_and_wavs/0_universal_sprites/demon_pointy", 10, true, 1.0)
+    if anim then
+        return anim
+    end
+
+    return GameUtils.loadAnim("png_and_wavs/0_universal_sprites/demon pointy", 10, true, 1.0)
+end
+
+
+local function loadFishTankAnim()
+    local candidates = {
+        "png_and_wavs/floor2/fishies",
+        "png_and_wavs/floor2/fishies.gif"
+    }
+
+    for i = 1, #candidates do
+        local anim = GameUtils.loadAnim(candidates[i], 10, true, 1.0)
+        if anim and anim.getFrame and anim:getFrame() then
+            return anim
+        end
+    end
+
+    return nil
+end
+
+local function loadFishFoodStrip()
+    local candidates = {
+        "png_and_wavs/floor2/fish_food",
+        "png_and_wavs/floor2/fish_food.png"
+    }
+
+    for i = 1, #candidates do
+        local image = GameUtils.loadImage(candidates[i])
+        if image then
+            return image
+        end
+    end
+
+    return nil
+end
+
+local function loadSmallDemonImage()
+    local candidates = {
+        "png_and_wavs/0_universal_sprites/demon_32x32",
+        "png_and_wavs/0_universal_sprites/demon_64x64",
+        "png_and_wavs/0_universal_sprites/demon_pointy"
+    }
+
+    for i = 1, #candidates do
+        local image = GameUtils.loadImage(candidates[i])
+        if image then
+            return image
+        end
+
+        local anim = GameUtils.loadAnim(candidates[i], 10, true, 1.0)
+        if anim and anim.getFrame and anim:getFrame() then
+            return anim:getFrame()
+        end
+    end
+
+    return nil
+end
+
+local function drawFishFoodFrame(strip, frameIndex, x, y)
+    if not strip then
+        return
+    end
+
+    local w, h = strip:getSize()
+    local frameW = math.floor(w / 3)
+
+    if frameW <= 0 then
+        frameW = w
+    end
+
+    local sourceX = (math.max(1, math.min(frameIndex, 3)) - 1) * frameW
+    local frame = gfx.image.new(frameW, h)
+
+    if frame then
+        gfx.pushContext(frame)
+        strip:draw(-sourceX, 0)
+        gfx.popContext()
+        frame:draw(x, y)
+    end
+end
+
 local function getFootRect(x, y)
     return {
         x = math.floor(x - 6),
@@ -144,6 +231,58 @@ local function drawFloor2TalkBox(ui)
         return
     end
 
+    local function drawOutlinedLeftArrow(xLeft, xRight, centerY)
+        local function drawArrow(fillColor, expand)
+            local bodyHalf = 4 + expand
+            local headLen = 10 + expand
+            local leftNeck = xLeft + headLen
+
+            gfx.setColor(fillColor)
+            gfx.fillPolygon(
+                xLeft, centerY,
+                leftNeck, centerY - bodyHalf,
+                xRight, centerY - bodyHalf,
+                xRight, centerY + bodyHalf,
+                leftNeck, centerY + bodyHalf
+            )
+        end
+
+        drawArrow(gfx.kColorBlack, 2)
+        drawArrow(gfx.kColorWhite, 0)
+        gfx.setColor(gfx.kColorBlack)
+    end
+
+    local function drawMeanOptionMarker(targetLine, targetY, demonAnim)
+        if not targetLine or not demonAnim then
+            return
+        end
+
+        demonAnim:update(1 / 30)
+
+        local demonFrame = demonAnim:getFrame()
+        if not demonFrame then
+            return
+        end
+
+        local textEndX = 10 + font:getTextWidth(targetLine)
+        local demonW, demonH = demonFrame:getSize()
+
+        local demonX = 400 - demonW - 8
+        local shakeOffset = math.floor(math.sin(playdate.getCurrentTimeMilliseconds() / 45) * 2)
+        local demonY = targetY - 10 + shakeOffset
+
+        local arrowRight = demonX - 6
+        local arrowLeft = textEndX + 10
+
+        if arrowLeft < arrowRight - 18 then
+            drawOutlinedLeftArrow(arrowLeft, arrowRight, targetY + 6)
+        end
+
+        demonFrame:draw(demonX, demonY)
+
+        GameUtils.drawTextWithUnderlay("hehehehehe", demonX - 30, targetY - 14, font)
+    end
+
     local font = Game.fonts.dialog or gfx.getSystemFont()
 
     local spokenLine = formatFloor2SpokenLine(ui.text)
@@ -165,6 +304,22 @@ local function drawFloor2TalkBox(ui)
 
     if bLine then
         GameUtils.drawTextWithUnderlay(bLine, 10, 214, font)
+    end
+
+    local meanTargets = {}
+
+    if type(ui.demonTarget) == "table" then
+        meanTargets = ui.demonTarget
+    elseif ui.demonTarget == "A" or ui.demonTarget == "B" then
+        meanTargets[ui.demonTarget] = true
+    end
+
+    if meanTargets.A then
+        drawMeanOptionMarker(aLine, 196, ui.demonPointerAnim)
+    end
+
+    if meanTargets.B then
+        drawMeanOptionMarker(bLine, 214, ui.demonPointerAnim)
     end
 end
 
@@ -578,21 +733,230 @@ function newFishTankPlaceholderScene(state)
     scene.state = state
     scene.musicPath = floor2MusicPaths.fishTank
 
+    local function cropImage(sourceImage, x, y, w, h)
+        if not sourceImage then
+            return nil
+        end
+
+        local image = gfx.image.new(w, h, gfx.kColorClear)
+
+        if not image then
+            return nil
+        end
+
+        gfx.pushContext(image)
+            sourceImage:draw(-x, -y)
+        gfx.popContext()
+
+        return image
+    end
+
+    local function loadFishFoodFrames()
+        local strip = GameUtils.loadImage("png_and_wavs/floor2/fish_food")
+        if not strip then
+            strip = GameUtils.loadImage("fish_food")
+        end
+
+        if not strip then
+            return nil
+        end
+
+        local stripW, stripH = strip:getSize()
+        local frameW = math.floor(stripW / 3)
+
+        return {
+            cropImage(strip, 0, 0, frameW, stripH),
+            cropImage(strip, frameW, 0, frameW, stripH),
+            cropImage(strip, frameW * 2, 0, frameW, stripH)
+        }
+    end
+
+    local function getCrankVerticalState(angle)
+        angle = angle % 360
+
+        -- much looser thresholds so smaller crank movement counts
+        if angle >= 250 and angle <= 330 then
+            return "up"
+        end
+
+        if angle >= 30 and angle <= 110 then
+            return "down"
+        end
+
+        return "neutral"
+    end
+
+    local function exitFishTank()
+        Game:switchScene(function(nextState)
+            return newFloor2WaitingRoomScene(nextState, "fromFishTank")
+        end)
+    end
+
+    scene.images = {
+        bg = GameUtils.loadAnim("png_and_wavs/floor2/fishies.gif", 8, true, 1.0)
+            or GameUtils.loadAnim("png_and_wavs/floor2/fishies", 8, true, 1.0),
+        foodFrames = loadFishFoodFrames(),
+        demon = GameUtils.loadImage("png_and_wavs/floor2/demon_32x32")
+            or GameUtils.loadImage("png_and_wavs/brain_mini_game/demon_32x32")
+            or GameUtils.loadImage("png_and_wavs/0_universal_sprites/demon_32x32")
+    }
+
+    scene.shakes = 0
+    scene.foodFrameIndex = 1
+    scene.pendingUp = false
+    scene.gameOver = false
+    scene.demonVibrateTimer = 0
+
+    function scene:updateShakeLogic()
+        local crankState = getCrankVerticalState(playdate.getCrankPosition())
+
+        if crankState == "up" then
+            self.foodFrameIndex = 2
+            self.pendingUp = true
+        elseif crankState == "down" then
+            self.foodFrameIndex = 3
+
+            if self.pendingUp and not self.gameOver then
+                self.pendingUp = false
+
+                if self.shakes < 10 then
+                    self.shakes = self.shakes + 1
+                end
+
+                if self.shakes >= 10 then
+                    self.gameOver = true
+                    self.state.floor2.fishTankBadEnding = true
+                end
+            end
+        else
+            self.foodFrameIndex = 1
+        end
+    end
+
+    function scene:drawShakeCounter(font)
+        GameUtils.drawTextWithUnderlay("shakes: " .. tostring(self.shakes), 8, 214, font)
+    end
+
+    function scene:drawExitPrompt(font)
+        local text = "B: exit"
+        local x = 400 - font:getTextWidth(text) - 8
+        GameUtils.drawTextWithUnderlay(text, x, 214, font)
+    end
+
+    function scene:drawDemon(font)
+        if self.shakes < 5 or self.gameOver then
+            return
+        end
+
+        local demonX = 400 - 32 - 8
+        local demonY = 8
+
+        if self.shakes > 5 then
+            demonY = demonY + math.floor(math.sin(self.demonVibrateTimer * 14) * 3)
+        end
+
+        if self.images.demon then
+            self.images.demon:draw(demonX, demonY)
+        end
+
+        local text = "cmon. just a few more shakes... cant hurt..?"
+        if self.shakes > 5 then
+            text = "hehehehehe"
+        end
+
+        local lines = GameUtils.wrapText(text, font, 120)
+        local startY = demonY + 36
+
+        for i = 1, #lines do
+            local line = lines[i]
+            local lineX = 400 - font:getTextWidth(line) - 8
+            GameUtils.drawTextWithUnderlay(line, lineX, startY + (i - 1) * (font:getHeight() + 2), font)
+        end
+    end
+
+    function scene:drawGameOver(font)
+        gfx.clear(gfx.kColorBlack)
+
+        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+
+        local lines = GameUtils.wrapText(
+            "you listened to the voices?? how could you. the fish are gladly fine, but this is unacceptable.",
+            font,
+            260
+        )
+
+        local totalH = #lines * font:getHeight() + (#lines - 1) * 4
+        local startY = math.floor((240 - totalH) / 2) - 10
+
+        for i = 1, #lines do
+            local line = lines[i]
+            local x = math.floor((400 - font:getTextWidth(line)) / 2)
+            local y = startY + (i - 1) * (font:getHeight() + 4)
+            font:drawText(line, x, y)
+        end
+
+        local exitText = "B: exit"
+        local exitX = math.floor((400 - font:getTextWidth(exitText)) / 2)
+        font:drawText(exitText, exitX, 212)
+
+        gfx.setImageDrawMode(gfx.kDrawModeCopy)
+    end
+
     function scene:update(dt)
-        if playdate.buttonJustPressed(playdate.kButtonB) then
-            Game:switchScene(function(nextState)
-                return newFloor2WaitingRoomScene(nextState, "fromFishTank")
-            end)
+        if self.images.bg then
+            self.images.bg:update(dt)
+        end
+
+        if self.gameOver then
+            if playdate.buttonJustPressed(playdate.kButtonB) then
+                exitFishTank()
+            end
+            return
+        end
+
+        self:updateShakeLogic()
+
+        if self.shakes >= 5 then
+            self.demonVibrateTimer = self.demonVibrateTimer + dt
+
+            if playdate.buttonJustPressed(playdate.kButtonB) then
+                exitFishTank()
+                return
+            end
         end
     end
 
     function scene:draw()
-        gfx.clear(gfx.kColorBlack)
-
         local font = Game.fonts.prompt or gfx.getSystemFont()
-        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-        font:drawText("B: back", 164, 112)
-        gfx.setImageDrawMode(gfx.kDrawModeCopy)
+
+        if self.gameOver then
+            self:drawGameOver(font)
+            return
+        end
+
+        gfx.clear(gfx.kColorWhite)
+
+        if self.images.bg then
+            local frame = self.images.bg:getFrame()
+            if frame then
+                frame:draw(0, 0)
+            end
+        end
+
+        if self.images.foodFrames and self.images.foodFrames[self.foodFrameIndex] then
+            local foodImage = self.images.foodFrames[self.foodFrameIndex]
+            local foodW, foodH = foodImage:getSize()
+            local foodX = math.floor((400 - foodW) / 2)
+            local foodY = 16 -- centered horizontally, lowered about 10 px from old top placement
+            foodImage:draw(foodX, foodY)
+        end
+
+        self:drawShakeCounter(font)
+
+        if self.shakes >= 5 then
+            self:drawExitPrompt(font)
+            self:drawDemon(font)
+        end
     end
 
     return scene
@@ -614,13 +978,15 @@ function newElevatorScene(state)
     scene.player = makeFloor2Player(198, 178)
     scene.ui = nil
 
-    function scene:setChoiceDialogue(text, aText, bText, onA, onB)
+    function scene:setChoiceDialogue(text, aText, bText, onA, onB, demonTarget)
         self.ui = {
             text = text,
             aText = aText,
             bText = bText,
             onA = onA,
-            onB = onB
+            onB = onB,
+            demonTarget = demonTarget,
+            demonPointerAnim = self.images.demonPointer
         }
     end
 
@@ -787,8 +1153,15 @@ function newTvPlaceholderScene(state)
 
     scene.state = state
     scene.musicPath = floor2MusicPaths.tvPlaceholder
+    scene.images = {
+        screen = GameUtils.loadAnim("png_and_wavs/floor2/tv_screen.gif", 10, true, 1.0)
+    }
 
     function scene:update(dt)
+        if self.images.screen then
+            self.images.screen:update(dt)
+        end
+
         if playdate.buttonJustPressed(playdate.kButtonB) then
             Game:switchScene(function(nextState)
                 return newFloor2TvRoomScene(nextState)
@@ -797,12 +1170,18 @@ function newTvPlaceholderScene(state)
     end
 
     function scene:draw()
-        gfx.clear(gfx.kColorBlack)
+        gfx.clear(gfx.kColorWhite)
+
+        local frame = nil
+        if self.images.screen then
+            frame = self.images.screen:getFrame()
+        end
+
+        if frame then
+            frame:draw(0, 0)
+        end
 
         local font = Game.fonts.prompt or gfx.getSystemFont()
-        gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
-        font:drawText("B: back", 164, 112)
-        gfx.setImageDrawMode(gfx.kDrawModeCopy)
     end
 
     return scene
@@ -831,13 +1210,14 @@ function newFloor2WaitingRoomScene(state, entry)
 
     scene.images = loadSue64Images()
     scene.images.base = GameUtils.loadImage("png_and_wavs/floor2/waiting_room_lvl2")
+    scene.images.demonPointer = loadDemonPointerAnim()
 
     scene.npcs = {
         evvie = {
-            drawX = 24,
-            drawY = 98,
-            blockRect = { x = 24, y = 126, w = 56, h = 46 },
-            talkZone = { x = 12, y = 98, w = 76, h = 80 }
+            drawX = 165,
+            drawY = 70,
+            blockRect = { x = 165, y = 70, w = 65, h = 80 },
+            talkZone = { x = 165, y = 70, w = 76, h = 80 }
         }
     }
 
@@ -848,13 +1228,15 @@ function newFloor2WaitingRoomScene(state, entry)
         { x = 386, y = 112, w = 14, h = 18 }
     }
 
-    function scene:setChoiceDialogue(text, aText, bText, onA, onB)
+    function scene:setChoiceDialogue(text, aText, bText, onA, onB, demonTarget)
         self.ui = {
             text = text,
             aText = aText,
             bText = bText,
             onA = onA,
-            onB = onB
+            onB = onB,
+            demonTarget = demonTarget,
+            demonPointerAnim = self.images.demonPointer
         }
     end
 
@@ -941,7 +1323,8 @@ function newFloor2WaitingRoomScene(state, entry)
                                     s2.state.floor2.evvieGone = true
                                 end
                             )
-                        end
+                        end,
+                        "B"
                     )
                 end
             }
@@ -1085,13 +1468,15 @@ function newFloor2TvRoomScene(state)
     scene.images = loadSue64Images()
     scene.images.base = GameUtils.loadImage("png_and_wavs/floor2/tv_waiting_room")
     scene.images.profK = GameUtils.loadImage("png_and_wavs/floor2/prof_k_64x96")
+    scene.images.boots = GameUtils.loadImage("png_and_wavs/floor2/tv_room_boots")
+    scene.images.demonPointer = loadDemonPointerAnim()
 
     scene.npcs = {
         profK = {
             drawX = 18,
             drawY = 8,
-            blockRect = { x = 18, y = 68, w = 52, h = 30 },
-            talkZone = { x = 10, y = 6, w = 74, h = 98 }
+            blockRect = { x = 18, y = 12, w = 52, h = 30 },
+            talkZone = { x = 18, y = 12, w = 74, h = 98 }
         }
     }
 
@@ -1100,13 +1485,15 @@ function newFloor2TvRoomScene(state)
         floor2Objects.tv.tvStand
     }
 
-    function scene:setChoiceDialogue(text, aText, bText, onA, onB)
+    function scene:setChoiceDialogue(text, aText, bText, onA, onB, demonTarget)
         self.ui = {
             text = text,
             aText = aText,
             bText = bText,
             onA = onA,
-            onB = onB
+            onB = onB,
+            demonTarget = demonTarget,
+            demonPointerAnim = self.images.demonPointer
         }
     end
 
@@ -1190,7 +1577,8 @@ function newFloor2TvRoomScene(state)
                                                     s4:restoreRoomMusic()
                                                 end
                                             )
-                                        end
+                                        end,
+                                        "B"
                                     )
                                 end,
                                 nil
@@ -1218,7 +1606,8 @@ function newFloor2TvRoomScene(state)
                                             s3:restoreRoomMusic()
                                         end
                                     )
-                                end
+                                end,
+                                "B"
                             )
                         end
                     )
@@ -1250,7 +1639,7 @@ function newFloor2TvRoomScene(state)
             end
         end
 
-        if best and bestDist <= 24 then
+        if best and bestDist <= 30 then
             return best
         end
 
@@ -1334,6 +1723,10 @@ function newFloor2TvRoomScene(state)
 
         if self.images.base then
             self.images.base:draw(0, 0)
+        end
+
+        if self.images.boots then
+            self.images.boots:draw(0, 0)
         end
 
         drawNpcImage(self.images.profK, self.npcs.profK.drawX, self.npcs.profK.drawY)
