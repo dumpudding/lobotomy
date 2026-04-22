@@ -76,22 +76,64 @@ function newEndingCreditsScene(state)
     scene.credits = loadAnimFirst({
         "png_and_wavs/outro/ending_credits",
         "png_and_wavs/outro/ending_credits.gif"
-    }, 0.7, true, 1.0)
+    }, 0.7, false, 1.0)
+
+    scene.phase = "playing"
+    scene.frameHold = 0
 
     function scene:update(dt)
-        if self.credits then
-            self.credits:update(dt)
+        if self.phase == "playing" then
+            if self.credits then
+                self.credits:update(dt)
+
+                if self.credits.finished then
+                    self.frameHold = self.frameHold + dt
+
+                    if self.frameHold >= 0.25 then
+                        self.phase = "menu"
+                    end
+                else
+                    self.frameHold = 0
+                end
+            end
+
+            return
+        end
+
+        if self.phase == "menu" then
+            if pd.buttonJustPressed(pd.kButtonA) then
+                if self.credits and self.credits.reset then
+                    self.credits:reset()
+                end
+
+                self.frameHold = 0
+                self.phase = "playing"
+                return
+            end
+
+            if pd.buttonJustPressed(pd.kButtonB) then
+                Game:go("title")
+                return
+            end
         end
     end
 
     function scene:draw()
         gfx.clear(gfx.kColorBlack)
 
-        if self.credits then
-            self.credits:draw(0, 0)
-        else
-            drawMissingText("missing: ending_credits")
+        if self.phase == "playing" then
+            if self.credits then
+                self.credits:draw(0, 0)
+            else
+                drawMissingText("missing: ending_credits")
+            end
+
+            return
         end
+
+        local font = Game.fonts.dialog or gfx.getSystemFont()
+        GameUtils.drawTextWithUnderlay("A: view credits again", 110, 104, font)
+        GameUtils.drawTextWithUnderlay("B: restart game", 120, 124, font)
     end
 
     return scene
