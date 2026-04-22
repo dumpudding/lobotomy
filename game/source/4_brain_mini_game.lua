@@ -297,19 +297,14 @@ function newBrainMiniGameScene(state)
                 self.state.replaceSueWithDemon = false
                 self.state.heldItem = "needle"
                 self.state.trashItems.needle = "held"
-
-                Game:switchScene(function(nextState)
-                    return newLobbyScene(nextState)
-                end)
+                Game:go("sneakEnding")
             end
             return
         end
 
         if self.phase == "fail_return" then
             if not self.crosshair and self.flashCount <= 0 then
-                Game:switchScene(function(nextState)
-                    return newLobbyScene(nextState)
-                end)
+                Game:go("badEnding")
             end
         end
     end

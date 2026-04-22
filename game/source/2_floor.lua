@@ -49,7 +49,8 @@ local function ensureFloor2State(state)
     if state.floor2 == nil then
         state.floor2 = {
             evvieGone = false,
-            profKDone = false
+            profKDone = false,
+            mouseHoleOutcome = nil
         }
     end
 
@@ -59,6 +60,10 @@ local function ensureFloor2State(state)
 
     if state.floor2.profKDone == nil then
         state.floor2.profKDone = false
+    end
+
+    if state.floor2.mouseHoleOutcome == nil then
+        state.floor2.mouseHoleOutcome = nil
     end
 end
 
@@ -231,28 +236,51 @@ local function drawFloor2TalkBox(ui)
         return
     end
 
-    local function drawOutlinedLeftArrow(xLeft, xRight, centerY)
-        local function drawArrow(fillColor, expand)
-            local bodyHalf = 4 + expand
-            local headLen = 10 + expand
-            local leftNeck = xLeft + headLen
+    local font = Game.fonts.dialog or gfx.getSystemFont()
 
-            gfx.setColor(fillColor)
+    local function drawMeanArrow(x1, x2, y)
+        if x2 <= x1 then
+            return
+        end
+
+        local headLen = 12
+        local halfThicknessOuter = 5
+        local halfThicknessInner = 3
+
+        local function fillArrow(color, grow)
+            local outerHead = headLen + grow
+            local leftNeck = x2 - outerHead
+
+            gfx.setColor(color)
             gfx.fillPolygon(
-                xLeft, centerY,
-                leftNeck, centerY - bodyHalf,
-                xRight, centerY - bodyHalf,
-                xRight, centerY + bodyHalf,
-                leftNeck, centerY + bodyHalf
+                x1, y - halfThicknessOuter - grow,
+                leftNeck, y - halfThicknessOuter - grow,
+                leftNeck, y - (halfThicknessOuter + 5 + grow),
+                x2, y,
+                leftNeck, y + (halfThicknessOuter + 5 + grow),
+                leftNeck, y + halfThicknessOuter + grow,
+                x1, y + halfThicknessOuter + grow
             )
         end
 
-        drawArrow(gfx.kColorBlack, 2)
-        drawArrow(gfx.kColorWhite, 0)
+        fillArrow(gfx.kColorBlack, 2)
+
+        local leftNeck = x2 - headLen
+        gfx.setColor(gfx.kColorWhite)
+        gfx.fillPolygon(
+            x1, y - halfThicknessInner,
+            leftNeck, y - halfThicknessInner,
+            leftNeck, y - (halfThicknessInner + 4),
+            x2, y,
+            leftNeck, y + (halfThicknessInner + 4),
+            leftNeck, y + halfThicknessInner,
+            x1, y + halfThicknessInner
+        )
+
         gfx.setColor(gfx.kColorBlack)
     end
 
-    local function drawMeanOptionMarker(targetLine, targetY, demonAnim)
+    local function drawMeanMarker(targetLine, targetY, demonAnim)
         if not targetLine or not demonAnim then
             return
         end
@@ -264,26 +292,28 @@ local function drawFloor2TalkBox(ui)
             return
         end
 
-        local textEndX = 10 + font:getTextWidth(targetLine)
+        local lineStartX = 10
+        local lineEndX = lineStartX + font:getTextWidth(targetLine)
         local demonW, demonH = demonFrame:getSize()
 
         local demonX = 400 - demonW - 8
-        local shakeOffset = math.floor(math.sin(playdate.getCurrentTimeMilliseconds() / 45) * 2)
-        local demonY = targetY - 10 + shakeOffset
+        local shake = math.floor(math.sin(playdate.getCurrentTimeMilliseconds() / 35) * 2)
+        local demonY = targetY - 10 + shake
 
-        local arrowRight = demonX - 6
-        local arrowLeft = textEndX + 10
+        local arrowStartX = lineEndX + 10
+        local arrowEndX = demonX - 6
+        local arrowY = targetY + 6
 
-        if arrowLeft < arrowRight - 18 then
-            drawOutlinedLeftArrow(arrowLeft, arrowRight, targetY + 6)
+        if arrowEndX - arrowStartX > 18 then
+            drawMeanArrow(arrowStartX, arrowEndX, arrowY)
         end
 
         demonFrame:draw(demonX, demonY)
 
-        GameUtils.drawTextWithUnderlay("hehehehehe", demonX - 30, targetY - 14, font)
+        local laughText = "hehehehehe"
+        local laughX = demonX - font:getTextWidth(laughText) - 6
+        GameUtils.drawTextWithUnderlay(laughText, laughX, targetY - 14, font)
     end
-
-    local font = Game.fonts.dialog or gfx.getSystemFont()
 
     local spokenLine = formatFloor2SpokenLine(ui.text)
     if spokenLine then
@@ -306,20 +336,12 @@ local function drawFloor2TalkBox(ui)
         GameUtils.drawTextWithUnderlay(bLine, 10, 214, font)
     end
 
-    local meanTargets = {}
-
-    if type(ui.demonTarget) == "table" then
-        meanTargets = ui.demonTarget
-    elseif ui.demonTarget == "A" or ui.demonTarget == "B" then
-        meanTargets[ui.demonTarget] = true
-    end
-
-    if meanTargets.A then
-        drawMeanOptionMarker(aLine, 196, ui.demonPointerAnim)
-    end
-
-    if meanTargets.B then
-        drawMeanOptionMarker(bLine, 214, ui.demonPointerAnim)
+    if ui.demonTarget and ui.demonPointerAnim then
+        if ui.demonTarget == "A" then
+            drawMeanMarker(aLine, 196, ui.demonPointerAnim)
+        elseif ui.demonTarget == "B" then
+            drawMeanMarker(bLine, 214, ui.demonPointerAnim)
+        end
     end
 end
 
@@ -604,20 +626,23 @@ local function makeBaseScene(state, footX, footY)
     return scene
 end
 
-function newFloor2HallwayScene(state)
-    local scene = makeBaseScene(state, 30, 101)
+function newFloor2HallwayScene(state, entry)
+    ensureFloor2State(state)
+
+    local spawnX = 30
+    local spawnY = 101
+
+    if entry == "fromWaiting" then
+        spawnX = 372
+        spawnY = 170
+    end
+
+    local scene = makeBaseScene(state, spawnX, spawnY)
 
     scene.musicPath = floor2MusicPaths.room
 
     scene.images = loadSue64Images()
     scene.images.base = GameUtils.loadImage("png_and_wavs/floor2/hallway_lvl2")
-    scene.images.mouseHole = GameUtils.loadImage("png_and_wavs/floor2/no_cheese_mouse")
-    scene.images.mouseSuccess = GameUtils.loadImage("png_and_wavs/floor2/mouse_success")
-    scene.images.mouseFailure = GameUtils.loadImage("png_and_wavs/floor2/mouse_failure")
-    scene.images.cheeseStretch = GameUtils.loadImage("png_and_wavs/floor2/cheese_stretch")
-    scene.images.playThese = GameUtils.loadImage("png_and_wavs/floor2/play_these")
-    scene.images.successIdiot = GameUtils.loadImage("png_and_wavs/floor2/success_idiot")
-    scene.images.failureIdiot = GameUtils.loadImage("png_and_wavs/floor2/failure_idiot")
 
     function scene:isInsideRoomBounds(footRect)
         if footRect.x < 0 or footRect.x + footRect.w > 400 then
@@ -643,6 +668,17 @@ function newFloor2HallwayScene(state)
                         return newLevel1Scene(nextState)
                     end)
                 end
+            },
+            {
+                name = "mouseHole",
+                prompt = "A: peep at mouse hole",
+                zone = { x = 158, y = 92, w = 70, h = 20 },
+                promptZone = { x = 186, y = 86, w = 16, h = 11 },
+                action = function(selfScene)
+                    Game:switchScene(function(nextState)
+                        return newFloor2MouseHoleScene(nextState)
+                    end)
+                end
             }
         }
 
@@ -658,7 +694,7 @@ function newFloor2HallwayScene(state)
             end
         end
 
-        if best and bestDist <= 5 then
+        if best and bestDist <= 12 then
             return best
         end
 
@@ -720,6 +756,367 @@ function newFloor2HallwayScene(state)
         drawSue64(self)
         self:drawPrompt()
         GameUtils.drawDialogue(self.dialogue)
+    end
+
+    return scene
+end
+
+function newFloor2MouseHoleScene(state, sharedImages)
+    ensureFloor2State(state)
+
+    local scene = {}
+
+    scene.state = state
+    scene.musicPath = floor2MusicPaths.room
+
+    local function cropImage(sourceImage, x, y, w, h)
+        if not sourceImage then
+            return nil
+        end
+
+        local image = gfx.image.new(w, h, gfx.kColorClear)
+        if not image then
+            return nil
+        end
+
+        gfx.pushContext(image)
+            sourceImage:draw(-x, -y)
+        gfx.popContext()
+
+        return image
+    end
+
+    local function loadCheeseStretchFrames()
+        local strip = GameUtils.loadImage("png_and_wavs/floor2/cheese_stretch")
+        if not strip then
+            strip = GameUtils.loadImage("png_and_wavs/floor2/cheese_stretch.png")
+        end
+
+        if not strip then
+            return {}
+        end
+
+        local stripW, stripH = strip:getSize()
+        local frameCount = 11
+        local frameW = math.floor(stripW / frameCount)
+        local frames = {}
+
+        for i = 1, frameCount do
+            frames[i] = cropImage(strip, (i - 1) * frameW, 0, frameW, stripH)
+        end
+
+        return frames
+    end
+
+    scene.images = {
+        mouseHole = GameUtils.loadImage("png_and_wavs/floor2/mouse_hole")
+            or GameUtils.loadImage("png_and_wavs/floor2/mouse_hole.png"),
+        noCheeseMouse = GameUtils.loadImage("png_and_wavs/floor2/no_cheese_mouse")
+            or GameUtils.loadImage("png_and_wavs/floor2/no_cheese_mouse.png"),
+        mouseSuccess = GameUtils.loadImage("png_and_wavs/floor2/mouse_success")
+            or GameUtils.loadImage("png_and_wavs/floor2/mouse_success.png"),
+        mouseFailure = GameUtils.loadImage("png_and_wavs/floor2/mouse_failure")
+            or GameUtils.loadImage("png_and_wavs/floor2/mouse_failure.png"),
+        successIdiot = GameUtils.loadImage("png_and_wavs/floor2/success_idiot")
+            or GameUtils.loadImage("png_and_wavs/floor2/success_idiot.png"),
+        failureIdiot = GameUtils.loadImage("png_and_wavs/floor2/failure_idiot")
+            or GameUtils.loadImage("png_and_wavs/floor2/failure_idiot.png"),
+        cheeseFrames = loadCheeseStretchFrames()
+    }
+
+    if scene.state.breakfast == nil then
+        scene.state.breakfast = {}
+    end
+
+    if scene.state.breakfast.eaten == nil then
+        scene.state.breakfast.eaten = {}
+    end
+
+    local breakfast = scene.state.breakfast
+    local eaten = breakfast.eaten
+
+    scene.cheeseEaten = eaten.cheese == true
+
+    -- user-requested behavior:
+    -- cheese is available by default unless it was explicitly eaten
+    scene.cheeseAvailable = not scene.cheeseEaten
+
+    scene.mode = "peek"
+    scene.stretchFrame = 1
+    scene.snapFrame = 11
+    scene.snapReached = false
+    scene.stretchMeter = 0
+    scene.showFeedPrompt = scene.cheeseAvailable and scene.state.floor2.mouseHoleOutcome == nil
+
+    local function goBackToHallway()
+        Game:switchScene(function(nextState)
+            return newFloor2HallwayScene(nextState, "fromWaiting")
+        end)
+    end
+
+    local function getStretchFrameCount()
+        return #scene.images.cheeseFrames
+    end
+
+    local function getStretchImage(index)
+        if #scene.images.cheeseFrames == 0 then
+            return nil
+        end
+
+        if index < 1 then
+            index = 1
+        end
+
+        if index > #scene.images.cheeseFrames then
+            index = #scene.images.cheeseFrames
+        end
+
+        return scene.images.cheeseFrames[index]
+    end
+
+    local function drawTopCornerPrompt(text, x, font)
+        GameUtils.drawTextWithUnderlay(text, x, 8, font)
+    end
+
+    local function drawBottomSubtitle(text, font)
+        local wrapped = GameUtils.wrapText(text, font, 360)
+        local lineH = font:getHeight() + 2
+        local totalH = #wrapped * lineH
+        local startY = 240 - totalH - 8
+
+        for i = 1, #wrapped do
+            local line = wrapped[i]
+            local w = font:getTextWidth(line)
+            local x = math.floor((400 - w) / 2)
+            local y = startY + (i - 1) * lineH
+            GameUtils.drawTextWithUnderlay(line, x, y, font)
+        end
+    end
+
+    local function drawBottomRightPrompt(text, font)
+        local w = font:getTextWidth(text)
+        GameUtils.drawTextWithUnderlay(text, 400 - w - 8, 240 - font:getHeight() - 8, font)
+    end
+
+    local function drawMissingFallback(label, font)
+        local text = "missing: " .. label
+        local w = font:getTextWidth(text)
+        GameUtils.drawTextWithUnderlay(text, math.floor((400 - w) / 2), 120, font)
+    end
+
+    function scene:startStretch()
+        if not self.showFeedPrompt then
+            return
+        end
+
+        -- consume cheese once the player actually chooses to feed
+        self.state.breakfast.cheeseStashed = false
+        self.showFeedPrompt = false
+        self.mode = "stretch"
+        self.stretchFrame = 1
+        self.snapReached = false
+        self.stretchMeter = 0
+    end
+
+    function scene:finishStretch()
+        if self.snapReached then
+            self.mode = "failureCard"
+        else
+            self.mode = "successCard"
+        end
+    end
+
+    function scene:advanceCard()
+        if self.mode == "successCard" then
+            self.state.floor2.mouseHoleOutcome = "success"
+            self.mode = "mouseSuccess"
+        elseif self.mode == "failureCard" then
+            self.state.floor2.mouseHoleOutcome = "failure"
+            self.mode = "mouseFailure"
+        end
+    end
+
+    function scene:updateStretch()
+        local frameCount = getStretchFrameCount()
+        if frameCount == 0 then
+            return
+        end
+
+        local snapFrame = math.min(self.snapFrame, frameCount)
+
+        local crankDelta = math.abs(playdate.getCrankChange())
+        self.stretchMeter = self.stretchMeter + crankDelta * 0.08
+
+        local computedFrame = 1 + math.floor(self.stretchMeter)
+
+        if computedFrame > frameCount then
+            computedFrame = frameCount
+        end
+
+        self.stretchFrame = computedFrame
+
+        if self.stretchFrame >= snapFrame then
+            self.stretchFrame = snapFrame
+            self.snapReached = true
+        end
+    end
+
+    function scene:update(dt)
+        if self.mode == "peek" then
+            if playdate.buttonJustPressed(playdate.kButtonB) then
+                goBackToHallway()
+                return
+            end
+
+            if self.showFeedPrompt and playdate.buttonJustPressed(playdate.kButtonA) then
+                self:startStretch()
+                return
+            end
+
+            return
+        end
+
+        if self.mode == "stretch" then
+            self:updateStretch()
+
+            if playdate.buttonJustPressed(playdate.kButtonA) then
+                self:finishStretch()
+                return
+            end
+
+            if playdate.buttonJustPressed(playdate.kButtonB) then
+                goBackToHallway()
+                return
+            end
+
+            return
+        end
+
+        if self.mode == "successCard" or self.mode == "failureCard" then
+            if playdate.buttonJustPressed(playdate.kButtonA) then
+                self:advanceCard()
+                return
+            end
+
+            return
+        end
+
+        if self.mode == "mouseSuccess" or self.mode == "mouseFailure" then
+            if playdate.buttonJustPressed(playdate.kButtonB) then
+                goBackToHallway()
+                return
+            end
+        end
+    end
+
+    function scene:draw()
+        local promptFont = Game.fonts.prompt or gfx.getSystemFont()
+        local dialogFont = Game.fonts.dialog or promptFont
+
+        gfx.clear(gfx.kColorWhite)
+
+        if self.mode == "peek" then
+            if self.state.floor2.mouseHoleOutcome == "success" then
+                if self.images.mouseSuccess then
+                    self.images.mouseSuccess:draw(0, 0)
+                else
+                    drawMissingFallback("mouse_success", promptFont)
+                end
+            elseif self.state.floor2.mouseHoleOutcome == "failure" then
+                if self.images.mouseFailure then
+                    self.images.mouseFailure:draw(0, 0)
+                else
+                    drawMissingFallback("mouse_failure", promptFont)
+                end
+            else
+                -- correct behavior:
+                -- cheese available -> normal mouse hole image
+                -- no cheese available -> no_cheese_mouse image
+                if self.showFeedPrompt then
+                    if self.images.mouseHole then
+                        self.images.mouseHole:draw(0, 0)
+                    else
+                        drawMissingFallback("mouse_hole", promptFont)
+                    end
+                else
+                    if self.images.noCheeseMouse then
+                        self.images.noCheeseMouse:draw(0, 0)
+                    elseif self.images.mouseHole then
+                        self.images.mouseHole:draw(0, 0)
+                    else
+                        drawMissingFallback("no_cheese_mouse / mouse_hole", promptFont)
+                    end
+                end
+            end
+
+            if self.state.floor2.mouseHoleOutcome == nil then
+                drawTopCornerPrompt("B: exit", 400 - promptFont:getTextWidth("B: exit") - 8, promptFont)
+
+                if self.showFeedPrompt then
+                    drawTopCornerPrompt("A: feed mouse!", 8, promptFont)
+                elseif self.cheeseEaten then
+                    drawBottomSubtitle("*shoot... i should have stashed that piece of cheese..*", dialogFont)
+                end
+            else
+                GameUtils.drawTextWithUnderlay("press B to exit", 8, 240 - promptFont:getHeight() - 8, promptFont)
+            end
+
+            return
+        end
+
+        if self.mode == "stretch" then
+            local stretchImage = getStretchImage(self.stretchFrame)
+            if stretchImage then
+                stretchImage:draw(0, 0)
+            else
+                drawMissingFallback("cheese_stretch", promptFont)
+            end
+            return
+        end
+
+        if self.mode == "successCard" then
+            if self.images.successIdiot then
+                self.images.successIdiot:draw(0, 0)
+            else
+                drawMissingFallback("success_idiot", promptFont)
+            end
+
+            drawBottomRightPrompt("A: continue", promptFont)
+            return
+        end
+
+        if self.mode == "failureCard" then
+            if self.images.failureIdiot then
+                self.images.failureIdiot:draw(0, 0)
+            else
+                drawMissingFallback("failure_idiot", promptFont)
+            end
+
+            drawBottomRightPrompt("A: continue", promptFont)
+            return
+        end
+
+        if self.mode == "mouseSuccess" then
+            if self.images.mouseSuccess then
+                self.images.mouseSuccess:draw(0, 0)
+            else
+                drawMissingFallback("mouse_success", promptFont)
+            end
+
+            GameUtils.drawTextWithUnderlay("press B to exit", 8, 240 - promptFont:getHeight() - 8, promptFont)
+            return
+        end
+
+        if self.mode == "mouseFailure" then
+            if self.images.mouseFailure then
+                self.images.mouseFailure:draw(0, 0)
+            else
+                drawMissingFallback("mouse_failure", promptFont)
+            end
+
+            GameUtils.drawTextWithUnderlay("press B to exit", 8, 240 - promptFont:getHeight() - 8, promptFont)
+            return
+        end
     end
 
     return scene
@@ -1063,7 +1460,7 @@ function newElevatorScene(state)
             },
             {
                 name = "operator",
-                prompt = "A: talk",
+                prompt = "A: talk to strange guy",
                 zone = floor2Objects.elevator.operatorZone,
                 action = function(selfScene)
                     selfScene:setChoiceDialogue(
@@ -1193,7 +1590,10 @@ function newFloor2WaitingRoomScene(state, entry)
     local spawnX = 96
     local spawnY = 170
 
-    if entry == "fromTvRoom" then
+    if entry == "fromHallway" then
+        spawnX = 20
+        spawnY = 170
+    elseif entry == "fromTvRoom" then
         spawnX = 356
         spawnY = 170
     elseif entry == "fromFishTank" then
@@ -1393,9 +1793,9 @@ function newFloor2WaitingRoomScene(state, entry)
     end
 
     function scene:checkRoomTransitions()
-        if self.player.footX <= 4 then
+        if self.player.footX <= 8 then
             Game:switchScene(function(nextState)
-                return newFloor2HallwayScene(nextState)
+                return newFloor2HallwayScene(nextState, "fromWaiting")
             end)
             return
         end
@@ -1606,8 +2006,7 @@ function newFloor2TvRoomScene(state)
                                             s3:restoreRoomMusic()
                                         end
                                     )
-                                end,
-                                "B"
+                                end
                             )
                         end
                     )

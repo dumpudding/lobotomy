@@ -8,6 +8,7 @@ import "2_floor"
 import "3_floor"
 import "3-1_trash_bin"
 import "4_brain_mini_game"
+import "5_ending"
 
 import "0_title_screen"
 
@@ -164,26 +165,11 @@ function updateGlobalAfterBreakfastSkip()
 end
 
 function GameUtils.isSkipComboDown()
-    return
-        playdate.buttonIsPressed(playdate.kButtonA) and
-        playdate.buttonIsPressed(playdate.kButtonB) and
-        playdate.buttonIsPressed(playdate.kButtonUp) and
-        playdate.buttonIsPressed(playdate.kButtonRight)
+    return false
 end
 
 function GameUtils.skipComboJustPressed()
-    local down = GameUtils.isSkipComboDown()
-    local fired = down and not Game.debug.skipComboWasDown
-    Game.debug.skipComboWasDown = down
-    return fired
-end
-
-function GameUtils.isFloor3WarpComboDown()
-    return
-        playdate.buttonIsPressed(playdate.kButtonA) and
-        playdate.buttonIsPressed(playdate.kButtonB) and
-        playdate.buttonIsPressed(playdate.kButtonLeft) and
-        playdate.buttonIsPressed(playdate.kButtonDown)
+    return false
 end
 
 function GameUtils.clamp(v, lo, hi)
@@ -567,7 +553,9 @@ Game = {
 
     debug = {
         skipComboWasDown = false,
-        floor3WarpWasDown = false
+        floor3WarpWasDown = false,
+        lobotomyChoiceWarpWasDown = false,
+        brainWinWarpWasDown = false
     },
 
     state = {
@@ -705,19 +693,6 @@ function Game:switchScene(factory)
     self:setScene(factory)
 end
 
-function Game:updateGlobalFloor3Warp()
-    local down = GameUtils.isFloor3WarpComboDown()
-    local fired = down and not self.debug.floor3WarpWasDown
-    self.debug.floor3WarpWasDown = down
-
-    if not fired then
-        return false
-    end
-
-    self:go("floor3Hallway")
-    return true
-end
-
 function Game:dropHeldItemFromLobby()
     local held = self.state.heldItem
     if held == nil then
@@ -788,12 +763,40 @@ Game.routes = {
         return newFloor3HallwayScene(state, entry)
     end,
 
+    floor3Room = function(state)
+        return newFloor3RoomScene(state)
+    end,
+
+    floor3BroomCloset = function(state)
+        return newFloor3BroomClosetScene(state)
+    end,
+
+    lobotomyDecision = function(state)
+        return newLobotomyDecisionScene(state)
+    end,
+
     trashBin = function(state)
         return newTrashScene(state)
     end,
 
     brainMinigame = function(state)
         return newBrainMiniGameScene(state)
+    end,
+
+    sneakEnding = function(state)
+        return newSneakEndingScene(state)
+    end,
+
+    badEnding = function(state)
+        return newBadEndingScene(state)
+    end,
+
+    healthyEnding = function(state)
+        return newHealthyEndingScene(state)
+    end,
+
+    endingCredits = function(state)
+        return newEndingCreditsScene(state)
     end
 }
 
@@ -805,11 +808,35 @@ function Game:go(routeName, ...)
         return
     end
 
+    self.currentRoute = routeName
+
     local args = { ... }
 
     self:setScene(function(state)
         return route(state, unpackFn(args))
     end)
+end
+
+
+local function floor3WarpComboDown()
+    return playdate.buttonIsPressed(playdate.kButtonA)
+        and playdate.buttonIsPressed(playdate.kButtonB)
+        and playdate.buttonIsPressed(playdate.kButtonLeft)
+        and playdate.buttonIsPressed(playdate.kButtonDown)
+end
+
+function Game:updateDebugCombos()
+    local floor3Down = floor3WarpComboDown()
+    local floor3Pressed = floor3Down and not self.debug.floor3WarpWasDown
+
+    self.debug.floor3WarpWasDown = floor3Down
+
+    if floor3Pressed then
+        self:go("floor3Hallway")
+        return true
+    end
+
+    return false
 end
 
 Game:loadFonts()
@@ -821,7 +848,7 @@ function playdate.update()
     local dt = (now - Game.lastTimeMs) / 1000
     Game.lastTimeMs = now
 
-    local warped = Game:updateGlobalFloor3Warp()
+    local warped = Game:updateDebugCombos()
 
     if not warped and Game.scene and Game.scene.update then
         Game.scene:update(dt)

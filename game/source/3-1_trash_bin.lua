@@ -269,8 +269,6 @@ function newTrashScene(state)
         local font = Game.fonts.prompt or gfx.getSystemFont()
         local nearby = self:getNearbyItemName()
 
-        GameUtils.drawTextWithUnderlay("B: exit trash", 8, 8, font)
-
         if nearby ~= nil then
             local data = self.itemData[nearby]
             local prompt = "A: pick up"
@@ -278,10 +276,6 @@ function newTrashScene(state)
             local x = GameUtils.clamp(data.promptAnchor.x, 4, 396 - w)
             local y = GameUtils.clamp(data.promptAnchor.y, 4, 228)
             GameUtils.drawTextWithUnderlay(prompt, x, y, font)
-        end
-
-        if self.state.heldItem ~= nil and self.fling == nil then
-            GameUtils.drawTextWithUnderlay("crank to fling aside", 246, 210, font)
         end
     end
 

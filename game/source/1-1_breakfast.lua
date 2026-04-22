@@ -650,6 +650,10 @@ function newBreakfastChewScene(state, itemKey)
     end
 
     function scene:finishItem()
+        if self.itemKey == "cheese" then
+            self.state.breakfast.cheeseStashed = false
+        end
+
         self.state.breakfast.eaten[self.itemKey] = true
         returnToBreakfastOrFinish()
     end

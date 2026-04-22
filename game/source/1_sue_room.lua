@@ -14,8 +14,25 @@ function newWindowSunriseScene(state)
     local scene = {}
 
     scene.state = state
-    scene.musicPath = "png_and_wavs/window_view/birds_morning"
+    scene.musicPath = "game/source/png_and_wavs/window_view/birds_morning"
     scene.anim = GameUtils.loadAnim("png_and_wavs/window_view/window_sunrise_animation.gif", 10, false, 0.80)
+    scene.birdsPlayer = nil
+
+    function scene:enter()
+        self.birdsPlayer = playdate.sound.fileplayer.new("png_and_wavs/window_view/birds_morning")
+        if self.birdsPlayer then
+            self.birdsPlayer:play(0)
+        else
+            print("sunrise birds load failed: png_and_wavs/window_view/birds_morning")
+        end
+    end
+
+    function scene:leave()
+        if self.birdsPlayer then
+            self.birdsPlayer:stop()
+            self.birdsPlayer = nil
+        end
+    end
 
     function scene:update(dt)
         if self.anim then

@@ -180,6 +180,17 @@ local function updateMovement(scene, dt)
     updateWalkAnim(scene.player, scene.images, dt)
 end
 
+local function drawPlaceholderElevatorNpc()
+    gfx.setColor(gfx.kColorBlack)
+    gfx.fillRoundRect(220, 118, 28, 58, 8)
+    gfx.fillCircleAtPoint(234, 114, 10)
+    gfx.setColor(gfx.kColorWhite)
+    gfx.fillCircleAtPoint(230, 112, 1)
+    gfx.fillCircleAtPoint(238, 112, 1)
+    gfx.setColor(gfx.kColorBlack)
+end
+
+
 local function drawSue(scene)
     local imageToDraw = nil
 
@@ -291,10 +302,39 @@ local function drawFloor3Prompt(text, anchor)
     end
 
     local font = Game.fonts.prompt or gfx.getSystemFont()
-    local w = font:getTextWidth(text)
-    local x = GameUtils.clamp(anchor.x, 4, 396 - w)
-    local y = GameUtils.clamp(anchor.y, 4, 228)
-    GameUtils.drawTextWithUnderlay(text, x, y, font)
+    local lines = {}
+    local startIndex = 1
+
+    while true do
+        local newlineIndex = string.find(text, "\n", startIndex, true)
+
+        if newlineIndex == nil then
+            local tail = string.sub(text, startIndex)
+            if tail ~= "" then
+                lines[#lines + 1] = tail
+            end
+            break
+        end
+
+        local line = string.sub(text, startIndex, newlineIndex - 1)
+        if line ~= "" then
+            lines[#lines + 1] = line
+        end
+
+        startIndex = newlineIndex + 1
+    end
+
+    if #lines == 0 then
+        lines[1] = text
+    end
+
+    for i = 1, #lines do
+        local line = lines[i]
+        local w = font:getTextWidth(line)
+        local x = GameUtils.clamp(anchor.x, 4, 396 - w)
+        local y = GameUtils.clamp(anchor.y + (i - 1) * (font:getHeight() + 2), 4, 228)
+        GameUtils.drawTextWithUnderlay(line, x, y, font)
+    end
 end
 
 local function evvieIsFriendly(state)
@@ -445,41 +485,109 @@ function newFloor3ElevatorScene(state)
     ensureFloor3State(state)
     state.floor3.elevatorFloor = 3
 
-    local scene = makeBaseScene(state, 196, 170, false)
-    scene.images.base = GameUtils.loadImage("png_and_wavs/elevator/elevator")
-    scene.player.speed = 3
+    local scene = {}
 
-    function scene:isInsideRoomBounds(footRect)
-        if footRect.x < 152 or footRect.x + footRect.w > 248 then
+    scene.state = state
+    scene.musicPath = floor3MusicPath
+
+    scene.images = {
+        base = GameUtils.loadImage("png_and_wavs/elevator/elevator"),
+        sue = loadSue32Images()
+    }
+
+    scene.player = makePlayer(198, 178, 3)
+    scene.ui = nil
+
+    function scene:setChoiceDialogue(text, aText, bText, onA, onB)
+        self.ui = {
+            text = text,
+            aText = aText,
+            bText = bText,
+            onA = onA,
+            onB = onB
+        }
+    end
+
+    function scene:setMessageDialogue(text, onClose)
+        self.ui = {
+            text = text,
+            onClose = onClose
+        }
+    end
+
+    function scene:handleUiInput()
+        if not self.ui then
             return false
         end
 
-        if footRect.y < 96 or footRect.y + footRect.h > 232 then
+        if self.ui.aText or self.ui.bText then
+            if pd.buttonJustPressed(pd.kButtonA) and self.ui.onA then
+                self.ui.onA(self)
+            elseif pd.buttonJustPressed(pd.kButtonB) and self.ui.onB then
+                self.ui.onB(self)
+            end
+            return true
+        end
+
+        if pd.buttonJustPressed(pd.kButtonA) or pd.buttonJustPressed(pd.kButtonB) then
+            local onClose = self.ui.onClose
+            self.ui = nil
+            if onClose then
+                onClose(self)
+            end
+            return true
+        end
+
+        return true
+    end
+
+    function scene:isInsideRoomBounds(footRect)
+        if footRect.x < 150 or footRect.x + footRect.w > 254 then
+            return false
+        end
+
+        if footRect.y < 118 or footRect.y + footRect.h > 186 then
             return false
         end
 
         return true
     end
 
+    function scene:isBlocked(x, y)
+        local footRect = getFootRect(x, y)
+
+        if not self:isInsideRoomBounds(footRect) then
+            return true
+        end
+
+        if rectsIntersect(footRect, { x = 222, y = 150, w = 26, h = 24 }) then
+            return true
+        end
+
+        return false
+    end
+
     function scene:getNearbyInteractive()
-        local items = {
+        local candidates = {
             {
+                name = "door",
                 prompt = "A: Exit Elevator",
-                zone = { x = 166, y = 78, w = 68, h = 20 },
-                anchor = { x = 240, y = 80 },
+                zone = { x = 150, y = 92, w = 100, h = 24 },
+                anchor = { x = 254, y = 96 },
                 action = function(selfScene)
                     Game:go("floor3Waiting", "fromElevator")
                 end
             },
             {
-                prompt = "A: talk to odd guy",
-                zone = { x = 220, y = 124, w = 28, h = 42 },
+                name = "operator",
+                prompt = "A: talk to weird guy",
+                zone = { x = 220, y = 118, w = 32, h = 54 },
                 anchor = { x = 254, y = 136 },
                 action = function(selfScene)
                     selfScene:setChoiceDialogue(
-                        "hey kid. which floor?",
-                        "2nd floor",
-                        "3rd floor",
+                        "hey kid, which floor?",
+                        "2nd",
+                        "3rd",
                         function(s)
                             s.ui = nil
                             Game:go("floor2Waiting", "fromElevator")
@@ -494,19 +602,34 @@ function newFloor3ElevatorScene(state)
 
         local best = nil
         local bestDist = 999
-        for i = 1, #items do
-            local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, items[i].zone)
+
+        for i = 1, #candidates do
+            local item = candidates[i]
+            local d = GameUtils.pointRectDistance(self.player.footX, self.player.footY, item.zone)
             if d < bestDist then
-                best = items[i]
+                best = item
                 bestDist = d
             end
         end
 
-        if best and bestDist <= 12 then
+        if best and bestDist <= 14 then
             return best
         end
 
         return nil
+    end
+
+    function scene:drawPrompt()
+        if self.ui then
+            return
+        end
+
+        local interactive = self:getNearbyInteractive()
+        if not interactive then
+            return
+        end
+
+        drawFloor3Prompt(interactive.prompt, interactive.anchor)
     end
 
     function scene:update(dt)
@@ -520,6 +643,7 @@ function newFloor3ElevatorScene(state)
             local interactive = self:getNearbyInteractive()
             if interactive then
                 interactive.action(self)
+                return
             end
         end
     end
@@ -531,12 +655,7 @@ function newFloor3ElevatorScene(state)
             self.images.base:draw(0, 0)
         end
 
-        gfx.setColor(gfx.kColorBlack)
-        gfx.fillCircleAtPoint(236, 150, 6)
-        gfx.drawLine(236, 156, 236, 167)
-        gfx.drawLine(236, 160, 230, 164)
-        gfx.drawLine(236, 160, 242, 164)
-
+        drawPlaceholderElevatorNpc()
         drawSue(scene)
         self:drawPrompt()
         drawFloor3TalkBox(self.ui)
@@ -866,7 +985,7 @@ function newFloor3RoomScene(state, entry)
 
         if not self.state.floor3.evvieDone then
             items[#items + 1] = {
-                prompt = "A: Talk",
+                prompt = "A: talk to evvie",
                 zone = self.evvie.zone,
                 anchor = self.evvie.anchor,
                 action = function(selfScene)
@@ -1006,7 +1125,7 @@ function newFloor3BroomClosetScene(state)
         local items = {
             {
                 kind = "door",
-                prompt = "A: leave room B: lock door from inside",
+                prompt = "A: leave room \n B: lock door from inside",
                 zone = { x = 186, y = 196, w = 30, h = 16 },
                 anchor = { x = 218, y = 180 }
             }
@@ -1118,9 +1237,7 @@ function newLobotomyDecisionScene(state)
 
         if pd.buttonJustPressed(pd.kButtonB) then
             self.state.floor3.noChoiceBranchTaken = true
-            Game:switchScene(function(nextState)
-                return newFloor3NoChoicePlaceholderScene(nextState)
-            end)
+            Game:go("healthyEnding")
         end
     end
 
